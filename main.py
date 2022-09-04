@@ -1,9 +1,11 @@
 import cv2
+import numpy as np
 import threading
 import cvzone
 from cvzone.SelfiSegmentationModule import SelfiSegmentation
 import os
 
+if_quit = False
 
 class camThread(threading.Thread):
     def __init__(self, previewName, camID):
@@ -19,20 +21,17 @@ class camThread(threading.Thread):
 def camPreview(previewName, camID):
     cv2.namedWindow(previewName)
     cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
-    cam.set(3, 640)  # width
-    cam.set(4, 480)  # height
-    if cam.isOpened():
-        success, frame = cam.read()
-    else:
-        success = False
-        print("0Failed to open " + previewName)
+    cam.set(3, 1280)  # width
+    cam.set(4, 720)  # height
 
-    while success:
-        cv2.imshow(previewName, frame)
+    while True:
         success, frame = cam.read()
+        if success:
+            cv2.imshow(previewName, frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
     print("1Failed to open " + previewName)
+    cam.release()
     cv2.destroyWindow(previewName)
 
 
