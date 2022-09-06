@@ -6,23 +6,26 @@ import cvzone
 from cvzone.SelfiSegmentationModule import SelfiSegmentation
 import os
 
-frames = np.empty(2, dtype=object)
+FRAMES = np.empty(2, dtype=object)
 success = [False, False]
-
+TERM = False
 
 def ctlThread():
     name = "Video"
     cv2.namedWindow(name)
     while True:
-        f0 = frames[0]
-        f1 = frames[1]
-        if not (f0 is None) and not (f1 is None):
+        f0 = FRAMES[0]
+        f1 = FRAMES[1]
+        if f0 is not None and f1 is not None:
 
             imgStacked = cvzone.stackImages([f0, f1], 2, 1)
             cv2.imshow(name, imgStacked)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
+    global TERM
+    TERM = True
+    cv2.destroyWindow(name)
 
 
 class camThread(threading.Thread):
@@ -46,15 +49,14 @@ def camPreview(previewName, camID, segmentor):
     while True:
 
         success[camID], frame = cam.read()
-        frames[camID] = segmentor.removeBG(frame, (255, 0, 0), threshold=0.9)
+        FRAMES[camID] = segmentor.removeBG(frame, (255, 0, 0), threshold=0.9)
 
         # if success:
         #     cv2.imshow(previewName, frameOut)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if TERM:
             break
-    print("1Failed to open " + previewName)
+    print("Exiting " + previewName)
     cam.release()
-    cv2.destroyWindow(previewName)
 
 
 thread0 = threading.Thread(target=ctlThread)
