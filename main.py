@@ -1,3 +1,4 @@
+# Import cvzone (opencv-python must be in 4.5.5.62), mediapipe
 import cv2
 import numpy as np
 import threading
