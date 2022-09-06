@@ -1,66 +1,89 @@
+# Import cvzone (opencv-python must be in 4.5.5.62), mediapipe
 import cv2
+import numpy as np
 import threading
 import cvzone
 from cvzone.SelfiSegmentationModule import SelfiSegmentation
 import os
 
+FRAMES = np.empty(2, dtype=object)
+success = [False, False]
+TERM = False
 
-# class camThread(threading.Thread):
-#     def __init__(self, previewName, camID):
-#         threading.Thread.__init__(self)
-#         self.previewName = previewName
-#         self.camID = camID
+def ctlThread():
+    name = "Video"
+    cv2.namedWindow(name)
+    while True:
+        f0 = FRAMES[0]
+        f1 = FRAMES[1]
+        if f0 is not None and f1 is not None:
+
+            imgStacked = cvzone.stackImages([f0, f1], 2, 1)
+            cv2.imshow(name, imgStacked)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    global TERM
+    TERM = True
+    cv2.destroyWindow(name)
+
+
+class camThread(threading.Thread):
+    def __init__(self, previewName, camID):
+        threading.Thread.__init__(self)
+        self.previewName = previewName
+        self.camID = camID
+
+    def run(self):
+        print("Starting " + self.previewName)
+        segmentor = SelfiSegmentation()
+        camPreview(self.previewName, self.camID, segmentor)
+
+
+def camPreview(previewName, camID, segmentor):
+    # cv2.namedWindow(previewName)
+    cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
+    cam.set(3, 426)  # width
+    cam.set(4, 240)  # height
+
+    while True:
+
+        success[camID], frame = cam.read()
+        FRAMES[camID] = segmentor.removeBG(frame, (255, 0, 0), threshold=0.9)
+
+        # if success:
+        #     cv2.imshow(previewName, frameOut)
+        if TERM:
+            break
+    print("Exiting " + previewName)
+    cam.release()
+
+
+thread0 = threading.Thread(target=ctlThread)
+thread1 = camThread("Camera 0", 0)
+thread2 = camThread("Camera 1", 1)
+thread0.start()
+thread1.start()
+thread2.start()
+
+# cap0 = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+# cap1 = cv2.VideoCapture(1)
+# cap0.set(3, 640)  # width
+# cap0.set(4, 480)  # height
+# cap1.set(3, 640)  # width
+# cap1.set(4, 480)  # height
 #
-#     def run(self):
-#         print("Starting " + self.previewName)
-#         camPreview(self.previewName, self.camID)
+# while True:
+#     ret0, img0 = cap0.read()
 #
+#     if ret0:
+#         cv2.imshow("Image0", img0)
+#     ret1, img1 = cap1.read()
+#     if ret1:
+#         cv2.imshow("Image1", img1)
 #
-# def camPreview(previewName, camID):
-#     cv2.namedWindow(previewName)
-#     cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
-#     cam.set(3, 640)  # width
-#     cam.set(4, 480)  # height
-#     if cam.isOpened():
-#         success, frame = cam.read()
-#     else:
-#         success = False
-#         print("0Failed to open " + previewName)
-#
-#     while success:
-#         cv2.imshow(previewName, frame)
-#         success, frame = cam.read()
-#         if cv2.waitKey(1) & 0xFF == ord('q'):
-#             break
-#     print("1Failed to open " + previewName)
-#     cv2.destroyWindow(previewName)
-#
-#
-# thread1 = camThread("Camera 0", 0)
-# thread2 = camThread("Camera 1", 1)
-# thread1.start()
-# thread2.start()
-
-cap0 = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-cap1 = cv2.VideoCapture(1)
-cap0.set(3, 640)  # width
-cap0.set(4, 480)  # height
-cap1.set(3, 640)  # width
-cap1.set(4, 480)  # height
-
-while True:
-    ret0, img0 = cap0.read()
-
-    if ret0:
-        cv2.imshow("Image0", img0)
-
-    ret1, img1 = cap1.read()
-
-    if ret1:
-        cv2.imshow("Image1", img1)
-
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+#     if cv2.waitKey(1) & 0xFF == ord('q'):
+#         break
 
 
 # from pymf import get_MF_devices
