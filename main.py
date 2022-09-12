@@ -4,15 +4,26 @@ import numpy as np
 import threading
 import cvzone
 from cvzone.SelfiSegmentationModule import SelfiSegmentation
+import mediapipe as mp
+import time
 import os
 
 FRAMES = np.empty(2, dtype=object)
-success = [False, False]
 TERM = False
+
+vid1 = cv2.VideoCapture("vid/Single_User_View_1(WideAngle).MOV")
+vid2 = cv2.VideoCapture("vid/Single_User_View_2(WideAngle).MOV")
+vids = [vid1, vid2]
+
+mp_drawing = mp.solutions.drawing_utils
+mp_face_mesh = mp.solutions.face_mesh
 
 def ctlThread():
     name = "Video"
     cv2.namedWindow(name)
+    imgBG = cv2.imread("background/Bar.jpg")
+    imgBG = cv2.resize(imgBG, (848, 480))
+
     while True:
         f0 = FRAMES[0]
         f1 = FRAMES[1]
@@ -36,27 +47,59 @@ class camThread(threading.Thread):
 
     def run(self):
         print("Starting " + self.previewName)
-        segmentor = SelfiSegmentation()
+        segmentor = SelfiSegmentation() #setup BGremover
         camPreview(self.previewName, self.camID, segmentor)
 
 
 def camPreview(previewName, camID, segmentor):
     # cv2.namedWindow(previewName)
-    cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
-    cam.set(3, 426)  # width
-    cam.set(4, 240)  # height
 
-    while True:
+    # Real time video cap
+    # cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
+    cam = vids[camID]
 
-        success[camID], frame = cam.read()
-        FRAMES[camID] = segmentor.removeBG(frame, (255, 0, 0), threshold=0.9)
+    # cam.set(3, 640)  # width
+    # cam.set(4, 360)  # height
 
-        # if success:
-        #     cv2.imshow(previewName, frameOut)
-        if TERM:
-            break
-    print("Exiting " + previewName)
-    cam.release()
+    drawing_spec = mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=1, circle_radius=1)
+
+    with mp_face_mesh.FaceMesh(
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    ) as face_mesh:
+        while cam.isOpened():
+            success, frame = cam.read()
+            if not success:
+                # print("empty frame!")
+                continue
+
+            frame = cv2.resize(frame, (480, 848))
+
+            frame = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
+            frame.flags.writeable = False
+            results = face_mesh.process(frame)
+            frame.flags.writeable = True
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            if results.multi_face_landmarks:
+
+                for face_landmarks in results.multi_face_landmarks:
+
+                    mp_drawing.draw_landmarks(
+                        image=frame,
+                        landmark_list=face_landmarks,
+                        connections=mp_face_mesh.FACEMESH_CONTOURS,
+                        landmark_drawing_spec=drawing_spec,
+                        connection_drawing_spec=drawing_spec
+                    )
+
+            FRAMES[camID] = segmentor.removeBG(frame, threshold=0.6)
+
+            # if success:
+            #     cv2.imshow(previewName, frameOut)
+            if TERM:
+                break
+        print("Exiting " + previewName)
+        cam.release()
 
 
 thread0 = threading.Thread(target=ctlThread)
