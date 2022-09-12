@@ -22,14 +22,27 @@ def ctlThread():
     name = "Video"
     cv2.namedWindow(name)
     imgBG = cv2.imread("background/Bar.jpg")
-    imgBG = cv2.resize(imgBG, (848, 480))
+    imgBG = cv2.resize(imgBG, (848, 960))
 
     while True:
+        global FRAMES
         f0 = FRAMES[0]
         f1 = FRAMES[1]
         if f0 is not None and f1 is not None:
-
+            # print(f0.shape)
             imgStacked = cvzone.stackImages([f0, f1], 2, 1)
+            # print(imgStacked.shape)
+
+            output = cv2.cvtColor(imgStacked, cv2.COLOR_BGR2RGBA)
+            col = (255, 0, 0)
+            temp = np.subtract(imgStacked, col)
+
+            temp[temp < 0] = 0
+            alpha = temp[:, :, 0]
+            output[:, :, 3] = alpha
+
+            # imgDisplay = imgBG.copy()
+            # imgDisplay [0:848, 0:480, :] = f0[0:848, 0:480, :]
             cv2.imshow(name, imgStacked)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -92,7 +105,7 @@ def camPreview(previewName, camID, segmentor):
                         connection_drawing_spec=drawing_spec
                     )
 
-            FRAMES[camID] = segmentor.removeBG(frame, threshold=0.6)
+            FRAMES[camID] = segmentor.removeBG(frame, (255, 0, 0), threshold=0.6)
 
             # if success:
             #     cv2.imshow(previewName, frameOut)
