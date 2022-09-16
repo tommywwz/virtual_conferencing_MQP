@@ -18,32 +18,54 @@ vids = [vid1, vid2]
 mp_drawing = mp.solutions.drawing_utils
 mp_face_mesh = mp.solutions.face_mesh
 
+
 def ctlThread():
+    H = 640
+    W = 720
     name = "Video"
     cv2.namedWindow(name)
-    imgBG = cv2.imread("background/Bar.jpg")
-    imgBG = cv2.resize(imgBG, (848, 960))
+    cv2.namedWindow("Test")
+    imgBG = cv2.imread("background/Meeting room.jpg")
+    imgBG = cv2.resize(imgBG, (W, H))
+
+    thread1 = camThread("Camera 0", 0)
+    thread2 = camThread("Camera 1", 1)
+    thread1.start()
+    thread2.start()
 
     while True:
         global FRAMES
         f0 = FRAMES[0]
         f1 = FRAMES[1]
         if f0 is not None and f1 is not None:
+
             # print(f0.shape)
             imgStacked = cvzone.stackImages([f0, f1], 2, 1)
             # print(imgStacked.shape)
 
-            output = cv2.cvtColor(imgStacked, cv2.COLOR_BGR2RGBA)
-            col = (255, 0, 0)
-            temp = np.subtract(imgStacked, col)
+            # imgStackedGBRA = cv2.cvtColor(imgStacked, cv2.COLOR_BGR2BGRA)
+            color = (255, 0, 0)  # color to make transparent
+            temp = np.subtract(imgStacked, color)
 
-            temp[temp < 0] = 0
-            alpha = temp[:, :, 0]
-            output[:, :, 3] = alpha
+            # Transparent mask
+            mask = (temp == (0, 0, 0))
+            mask_bin = (mask[:, :, 0] & mask[:, :, 1] & mask[:, :, 2])
 
+            alpha = np.zeros((H, W), dtype=np.uint8)
+            imgBG_display = imgBG.copy()
+            # imgBG_display[mask_bin, :] = imgBG[mask_bin, :]
+            imgBG_display[~mask_bin, :] = imgStacked[~mask_bin, :]
+
+            alpha[mask_bin] = 0
+            alpha[~mask_bin] = 255
+
+            # BG = imgBG.copy()
+            # BG[0:640, 0:720, :] = cv2.cvtColor(imgStackedGBRA, cv2.COLOR_BGRA2BGR)
             # imgDisplay = imgBG.copy()
             # imgDisplay [0:848, 0:480, :] = f0[0:848, 0:480, :]
-            cv2.imshow(name, imgStacked)
+
+            cv2.imshow(name, imgBG_display)
+            cv2.imshow("Test", alpha)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
@@ -74,7 +96,7 @@ def camPreview(previewName, camID, segmentor):
     # cam.set(3, 640)  # width
     # cam.set(4, 360)  # height
 
-    drawing_spec = mp_drawing.DrawingSpec(color=(255, 0, 0), thickness=1, circle_radius=1)
+    drawing_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=1, circle_radius=1)
 
     with mp_face_mesh.FaceMesh(
         min_detection_confidence=0.5,
@@ -86,7 +108,7 @@ def camPreview(previewName, camID, segmentor):
                 # print("empty frame!")
                 continue
 
-            frame = cv2.resize(frame, (480, 848))
+            frame = cv2.resize(frame, (360, 640))
 
             frame = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
             frame.flags.writeable = False
@@ -116,11 +138,8 @@ def camPreview(previewName, camID, segmentor):
 
 
 thread0 = threading.Thread(target=ctlThread)
-thread1 = camThread("Camera 0", 0)
-thread2 = camThread("Camera 1", 1)
 thread0.start()
-thread1.start()
-thread2.start()
+
 
 # cap0 = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 # cap1 = cv2.VideoCapture(1)
