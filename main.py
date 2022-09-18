@@ -8,12 +8,13 @@ import mediapipe as mp
 import time
 import os
 
-FRAMES = np.empty(2, dtype=object)
+FRAMES = np.empty(3, dtype=object)
 TERM = False
 
 vid1 = cv2.VideoCapture("vid/Single_User_View_1(WideAngle).MOV")
 vid2 = cv2.VideoCapture("vid/Single_User_View_2(WideAngle).MOV")
-vids = [vid1, vid2]
+vid3 = cv2.VideoCapture("vid/IMG_0582.MOV")
+vids = [vid1, vid2, vid3]
 
 mp_drawing = mp.solutions.drawing_utils
 mp_face_mesh = mp.solutions.face_mesh
@@ -25,24 +26,31 @@ def ctlThread():
     name = "Video"
     cv2.namedWindow(name)
     cv2.namedWindow("Test")
-    imgBG = cv2.imread("background/Meeting room.jpg")
+    cv2.namedWindow("twoperson")
+    imgBG = cv2.imread("background/Bar.jpg")
     imgBG = cv2.resize(imgBG, (W, H))
 
     thread1 = camThread("Camera 0", 0)
     thread2 = camThread("Camera 1", 1)
+    thread3 = camThread("Camera 2", 2)
     thread1.start()
     thread2.start()
+    thread3.start()
 
     while True:
         global FRAMES
         f0 = FRAMES[0]
         f1 = FRAMES[1]
+        f2 = FRAMES[2]
+
+        if f2 is not None:
+            cv2.imshow("twoperson", f2)
+
         if f0 is not None and f1 is not None:
 
             # print(f0.shape)
             imgStacked = cvzone.stackImages([f0, f1], 2, 1)
             # print(imgStacked.shape)
-
             # imgStackedGBRA = cv2.cvtColor(imgStacked, cv2.COLOR_BGR2BGRA)
             color = (255, 0, 0)  # color to make transparent
             temp = np.subtract(imgStacked, color)
@@ -62,9 +70,9 @@ def ctlThread():
 
             contours, hierarchy = cv2.findContours(alpha_grey.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             image_copy = imgBG_output.copy()
-            cv2.drawContours(image=image_copy, contours=contours, contourIdx=-1, color=(0, 255, 0), thickness=3,
+            cv2.drawContours(image=image_copy, contours=contours, contourIdx=-1, color=(0, 255, 0), thickness=1,
                              lineType=cv2.LINE_AA)
-            blurred_img = cv2.GaussianBlur(imgBG_output, (5, 5), 0)
+            blurred_img = cv2.GaussianBlur(imgBG_output, (9, 9), 0)
             output = np.where(mask == np.array([0, 255, 0]), blurred_img, imgBG_output)
             # BG = imgBG.copy()
             # BG[0:640, 0:720, :] = cv2.cvtColor(imgStackedGBRA, cv2.COLOR_BGRA2BGR)
@@ -72,7 +80,7 @@ def ctlThread():
             # imgDisplay [0:848, 0:480, :] = f0[0:848, 0:480, :]
 
             cv2.imshow(name, imgBG_output)
-            cv2.imshow("Test", output)
+            cv2.imshow("Test", alpha_grey)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
@@ -115,7 +123,14 @@ def camPreview(previewName, camID, segmentor):
                 # print("empty frame!")
                 continue
 
-            frame = cv2.resize(frame, (360, 640))
+            if camID != 2:
+                frame = cv2.resize(frame, (360, 640))
+            else:
+                frame = cv2.resize(frame, (640, 360))
+                bg = cv2.resize(cv2.imread("background/Bar.jpg"), (640, 360))
+
+                FRAMES[camID] = segmentor.removeBG(frame, bg, threshold=0.5)
+                continue
 
             frame = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
             frame.flags.writeable = False
