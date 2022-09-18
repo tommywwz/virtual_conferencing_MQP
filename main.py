@@ -47,25 +47,32 @@ def ctlThread():
             color = (255, 0, 0)  # color to make transparent
             temp = np.subtract(imgStacked, color)
 
-            # Transparent mask
+            # Transparent mask stores boolean value
             mask = (temp == (0, 0, 0))
-            mask_bin = (mask[:, :, 0] & mask[:, :, 1] & mask[:, :, 2])
+            mask_singleCH = (mask[:, :, 0] & mask[:, :, 1] & mask[:, :, 2])
 
-            alpha = np.zeros((H, W), dtype=np.uint8)
-            imgBG_display = imgBG.copy()
-            # imgBG_display[mask_bin, :] = imgBG[mask_bin, :]
-            imgBG_display[~mask_bin, :] = imgStacked[~mask_bin, :]
+            alpha = np.zeros(imgStacked.shape, dtype=np.uint8)
+            imgBG_output = imgBG.copy()
+            # imgBG_output[mask_bin, :] = imgBG[mask_bin, :]
+            imgBG_output[~mask_singleCH, :] = imgStacked[~mask_singleCH, :]
 
-            alpha[mask_bin] = 0
-            alpha[~mask_bin] = 255
+            alpha[mask_singleCH] = 0
+            alpha[~mask_singleCH] = 255
+            alpha_grey = cv2.cvtColor(alpha, cv2.COLOR_BGR2GRAY)
 
+            contours, hierarchy = cv2.findContours(alpha_grey.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            image_copy = imgBG_output.copy()
+            cv2.drawContours(image=image_copy, contours=contours, contourIdx=-1, color=(0, 255, 0), thickness=3,
+                             lineType=cv2.LINE_AA)
+            blurred_img = cv2.GaussianBlur(imgBG_output, (5, 5), 0)
+            output = np.where(mask == np.array([0, 255, 0]), blurred_img, imgBG_output)
             # BG = imgBG.copy()
             # BG[0:640, 0:720, :] = cv2.cvtColor(imgStackedGBRA, cv2.COLOR_BGRA2BGR)
             # imgDisplay = imgBG.copy()
             # imgDisplay [0:848, 0:480, :] = f0[0:848, 0:480, :]
 
-            cv2.imshow(name, imgBG_display)
-            cv2.imshow("Test", alpha)
+            cv2.imshow(name, imgBG_output)
+            cv2.imshow("Test", output)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
@@ -92,7 +99,7 @@ def camPreview(previewName, camID, segmentor):
     # Real time video cap
     # cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
     cam = vids[camID]
-
+    # cv2.flip()
     # cam.set(3, 640)  # width
     # cam.set(4, 360)  # height
 
@@ -127,7 +134,7 @@ def camPreview(previewName, camID, segmentor):
                         connection_drawing_spec=drawing_spec
                     )
 
-            FRAMES[camID] = segmentor.removeBG(frame, (255, 0, 0), threshold=0.6)
+            FRAMES[camID] = segmentor.removeBG(frame, (255, 0, 0), threshold=0.5)
 
             # if success:
             #     cv2.imshow(previewName, frameOut)
