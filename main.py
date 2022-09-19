@@ -13,7 +13,7 @@ TERM = False
 
 vid1 = cv2.VideoCapture("vid/Single_User_View_1(WideAngle).MOV")
 vid2 = cv2.VideoCapture("vid/Single_User_View_2(WideAngle).MOV")
-vid3 = cv2.VideoCapture("vid/IMG_0582.MOV")
+vid3 = cv2.VideoCapture("vid/IMG_0582.MOV")  # actual two-person video for comparison
 vids = [vid1, vid2, vid3]
 
 mp_drawing = mp.solutions.drawing_utils
@@ -21,13 +21,13 @@ mp_face_mesh = mp.solutions.face_mesh
 
 
 def ctlThread():
-    H = 640
+    H = 640  # window size
     W = 720
     name = "Video"
     cv2.namedWindow(name)
     cv2.namedWindow("Test")
     cv2.namedWindow("twoperson")
-    imgBG = cv2.imread("background/Bar.jpg")
+    imgBG = cv2.imread("background/Wood_table.jpg")  # read virtual background
     imgBG = cv2.resize(imgBG, (W, H))
 
     thread1 = camThread("Camera 0", 0)
@@ -48,20 +48,17 @@ def ctlThread():
 
         if f0 is not None and f1 is not None:
 
-            # print(f0.shape)
+
             imgStacked = cvzone.stackImages([f0, f1], 2, 1)
-            # print(imgStacked.shape)
-            # imgStackedGBRA = cv2.cvtColor(imgStacked, cv2.COLOR_BGR2BGRA)
+
             color = (255, 0, 0)  # color to make transparent
             temp = np.subtract(imgStacked, color)
 
             # Transparent mask stores boolean value
             mask = (temp == (0, 0, 0))
             mask_singleCH = (mask[:, :, 0] & mask[:, :, 1] & mask[:, :, 2])
-
             alpha = np.zeros(imgStacked.shape, dtype=np.uint8)
             imgBG_output = imgBG.copy()
-            # imgBG_output[mask_bin, :] = imgBG[mask_bin, :]
             imgBG_output[~mask_singleCH, :] = imgStacked[~mask_singleCH, :]
 
             alpha[mask_singleCH] = 0
@@ -70,9 +67,9 @@ def ctlThread():
 
             contours, hierarchy = cv2.findContours(alpha_grey.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             image_copy = imgBG_output.copy()
-            cv2.drawContours(image=image_copy, contours=contours, contourIdx=-1, color=(0, 255, 0), thickness=1,
+            cv2.drawContours(image=image_copy, contours=contours, contourIdx=-1, color=(0, 255, 0), thickness=3,
                              lineType=cv2.LINE_AA)
-            blurred_img = cv2.GaussianBlur(imgBG_output, (9, 9), 0)
+            blurred_img = cv2.GaussianBlur(imgBG_output, (17, 17), 0)
             output = np.where(mask == np.array([0, 255, 0]), blurred_img, imgBG_output)
             # BG = imgBG.copy()
             # BG[0:640, 0:720, :] = cv2.cvtColor(imgStackedGBRA, cv2.COLOR_BGRA2BGR)
@@ -82,7 +79,7 @@ def ctlThread():
             cv2.imshow(name, imgBG_output)
             cv2.imshow("Test", alpha_grey)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord('q'):  # shortcut key to close window when running
             break
     global TERM
     TERM = True
@@ -102,8 +99,9 @@ class camThread(threading.Thread):
 
 
 def camPreview(previewName, camID, segmentor):
-    # cv2.namedWindow(previewName)
+    # for now, we're using recorded videos instead of real-time cams to run test. Ignore commented codes below.
 
+    # cv2.namedWindow(previewName)
     # Real time video cap
     # cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
     cam = vids[camID]
@@ -127,20 +125,23 @@ def camPreview(previewName, camID, segmentor):
                 frame = cv2.resize(frame, (360, 640))
             else:
                 frame = cv2.resize(frame, (640, 360))
-                bg = cv2.resize(cv2.imread("background/Bar.jpg"), (640, 360))
+                bg = cv2.resize(cv2.imread("background/Wood_table.jpg"), (640, 360))
 
-                FRAMES[camID] = segmentor.removeBG(frame, bg, threshold=0.5)
+                FRAMES[camID] = segmentor.removeBG(frame, bg, threshold = 0.5)
                 continue
 
-            frame = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
+            # convert to RGB, apply face detection, convert back to RGB
+            frame = cv2.cvtColor(cv2.flip(frame, -1), cv2.COLOR_BGR2RGB)  # rewrite "1" to "-1" if display upside-down
             frame.flags.writeable = False
             results = face_mesh.process(frame)
             frame.flags.writeable = True
             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
             if results.multi_face_landmarks:
 
                 for face_landmarks in results.multi_face_landmarks:
 
+                    # draw recognition landmarks
                     mp_drawing.draw_landmarks(
                         image=frame,
                         landmark_list=face_landmarks,
