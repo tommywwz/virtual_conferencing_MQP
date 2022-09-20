@@ -19,6 +19,14 @@ vids = [vid1, vid2, vid3]
 mp_drawing = mp.solutions.drawing_utils
 mp_face_mesh = mp.solutions.face_mesh
 
+# image = cv2.imread("background/original.jpg")
+# grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+# blurred = cv2.GaussianBlur(grey, (3, 3), 0)
+# edged = cv2.Canny(blurred, 10, 100)
+#
+# cv2.imshow("Original image", image)
+# cv2.imshow("Edged image", edged)
+
 
 def ctlThread():
     H = 640  # window size
