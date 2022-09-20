@@ -3,12 +3,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pyautogui as pg
 
-image = cv2.imread("single_user.jpg")
+image = cv2.imread("vid/single_user.jpg")
 grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 blurred = cv2.GaussianBlur(grey, (3, 3), 0)
 edged = cv2.Canny(blurred, 150, 160)
 line_image = np.copy(image) * 0
-lines = cv2.HoughLinesP(edged, 1, np.pi/180, 15, np.array([]), 100, 20)
+lines = cv2.HoughLinesP(edged, 1, np.pi/180, 15, np.array([]), 90, 0)
 
 for line in lines:
     for x1, y1, x2, y2 in line:
