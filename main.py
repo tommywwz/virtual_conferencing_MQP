@@ -20,9 +20,26 @@ mp_drawing = mp.solutions.drawing_utils
 mp_face_mesh = mp.solutions.face_mesh
 
 
+def Yshift_img(vector, y_off, fill_clr=(0, 0, 0)):
+    h, w, c = vector.shape
+
+    blank = np.full(shape=(np.abs(y_off), w, c), fill_value=fill_clr)
+    if y_off > 0:
+        stack_img = np.vstack((vector, blank))
+    else:
+        stack_img = np.vstack((blank, vector))
+
+    img_out = stack_img[0:h, 0:w, :]
+    return img_out
+
+
 def ctlThread():
+    x_off = 0
+    y_off = -10
+    blue = (255, 0, 0)
     H = 640
     W = 720
+    halfW = int(W/2)
     name = "Video"
     cv2.namedWindow(name)
     cv2.namedWindow("Test")
@@ -48,12 +65,13 @@ def ctlThread():
 
         if f0 is not None and f1 is not None:
 
-            # print(f0.shape)
+            f0 = cv2.resize(f0, (halfW, H))
+            f1 = cv2.resize(f1, (halfW, H))
+            f0 = Yshift_img(f0, -50, blue)
+
             imgStacked = cvzone.stackImages([f0, f1], 2, 1)
-            # print(imgStacked.shape)
-            # imgStackedGBRA = cv2.cvtColor(imgStacked, cv2.COLOR_BGR2BGRA)
-            color = (255, 0, 0)  # color to make transparent
-            temp = np.subtract(imgStacked, color)
+
+            temp = np.subtract(imgStacked, blue)
 
             # Transparent mask stores boolean value
             mask = (temp == (0, 0, 0))
