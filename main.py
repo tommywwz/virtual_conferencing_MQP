@@ -26,10 +26,13 @@ def Yshift_img(vector, y_off, fill_clr=(0, 0, 0)):
     blank = np.full(shape=(np.abs(y_off), w, c), fill_value=fill_clr)
     if y_off > 0:
         stack_img = np.vstack((vector, blank))
+        h1, w1, c1 = stack_img.shape
+        h = h1-h
+        img_out = stack_img[h:h1, 0:w, :]
     else:
         stack_img = np.vstack((blank, vector))
+        img_out = stack_img[0:h, 0:w, :]
 
-    img_out = stack_img[0:h, 0:w, :]
     return img_out
 
 
@@ -67,7 +70,7 @@ def ctlThread():
 
             f0 = cv2.resize(f0, (halfW, H))
             f1 = cv2.resize(f1, (halfW, H))
-            f0 = Yshift_img(f0, -50, blue)
+            f0 = Yshift_img(f0, -250, blue)
 
             imgStacked = cvzone.stackImages([f0, f1], 2, 1)
 
@@ -148,6 +151,8 @@ def camPreview(previewName, camID, segmentor):
                 bg = cv2.resize(cv2.imread("background/Bar.jpg"), (640, 360))
 
                 FRAMES[camID] = segmentor.removeBG(frame, bg, threshold=0.5)
+                if TERM:
+                    break
                 continue
 
             frame = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
