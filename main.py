@@ -38,7 +38,7 @@ def Yshift_img(vector, y_off, fill_clr=(0, 0, 0)):
 
 def ctlThread():
     x_off = 0
-    y_off = -10
+    y_off = -50
     blue = (255, 0, 0)
     H = 640
     W = 720
@@ -70,7 +70,7 @@ def ctlThread():
 
             f0 = cv2.resize(f0, (halfW, H))
             f1 = cv2.resize(f1, (halfW, H))
-            f0 = Yshift_img(f0, -250, blue)
+            f0 = Yshift_img(f0, y_off, blue)
 
             imgStacked = cvzone.stackImages([f0, f1], 2, 1)
 
@@ -173,9 +173,8 @@ def camPreview(previewName, camID, segmentor):
                     )
 
             FRAMES[camID] = segmentor.removeBG(frame, (255, 0, 0), threshold=0.5)
+            # FRAMES[camID] = frame
 
-            # if success:
-            #     cv2.imshow(previewName, frameOut)
             if TERM:
                 break
         print("Exiting " + previewName)
