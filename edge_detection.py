@@ -7,7 +7,7 @@ cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 cam.set(3, 640)  # width
 cam.set(4, 360)  # height
 # image = cv2.imread("vid/single_user.jpg")
-old_line = np.zeros((1, 4), dtype=np.int32)
+old_lines = None
 while cam.isOpened():
 
     success, image = cam.read()
@@ -19,20 +19,22 @@ while cam.isOpened():
         edged = cv2.Canny(blurred, 150, 160)
         # line_image = np.copy(image) * 0
         lines = cv2.HoughLinesP(edged, 1, np.pi / 180, 15, np.array([]), 90, 0)
+        # old_lines = lines
         line_image = image.copy()
 
         if lines is not None:
             print(lines)
+            old_lines = lines.copy()
             for line in lines:
                 for x1, y1, x2, y2 in line:
                     if np.abs(y1 - y2) < 25:
-                        old_line = line
 
                         cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
 
-        else:
-            for x1, y1, x2, y2 in old_line:
-                cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
+        elif old_lines is not None:
+            for line in old_lines:
+                for x1, y1, x2, y2 in line:
+                    cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
 
         # line_image = cv2.addWeighted(image, 1, line_image, 1, 0)
         cv2.imshow("Original image", image)
