@@ -33,6 +33,8 @@ while cam.isOpened():
 
         elif old_lines is not None:
             for line in old_lines:
+                # image = cv2.polylines(line_image, [old_lines],
+                #                       False, (0, 255, 255), 2)
                 for x1, y1, x2, y2 in line:
                     cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
 

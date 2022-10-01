@@ -10,6 +10,10 @@ import os
 
 FRAMES = np.empty(3, dtype=object)
 TERM = False
+W = 640
+H = 360
+R = H / W  # aspect ratio using the ratio of height to width to improve the efficiency of stackIMG function
+BLUE = (255, 0, 0)
 
 vid1 = cv2.VideoCapture("vid/Single_User_View_1(WideAngle).MOV")
 vid2 = cv2.VideoCapture("vid/Single_User_View_2(WideAngle).MOV")
@@ -27,7 +31,7 @@ def Yshift_img(vector, y_off, fill_clr=(0, 0, 0)):
     if y_off > 0:
         stack_img = np.vstack((vector, blank))
         h1, w1, c1 = stack_img.shape
-        h = h1-h
+        h = h1 - h
         img_out = stack_img[h:h1, 0:w, :]
     else:
         stack_img = np.vstack((blank, vector))
@@ -36,26 +40,70 @@ def Yshift_img(vector, y_off, fill_clr=(0, 0, 0)):
     return img_out
 
 
+def stackParam(cam_list, bg_shape: int):
+    # should be called everytime a new cam joined
+    # return: fit_width, number of image to stack, spacing for each camera,
+    bg_h, bg_w, bg_c = bg_shape
+    num_of_cam = len(cam_list)
+    w_step = int(np.floor(bg_w / num_of_cam))
+    fit_width = w_step
+    fit_height = np.floor(fit_width * R)
+
+    if fit_height > bg_h:
+        fit_width = np.floor(bg_h / R)
+        fit_height = bg_h
+
+    fit_shape = [int(fit_height), int(fit_width)]
+
+    margin_h = np.floor((bg_h - fit_height) / 2)
+    margin_w = np.floor((w_step - fit_width) / 2)
+    margins = [int(margin_h), int(margin_w)]
+
+    return fit_shape, w_step, margins
+
+
+def stackIMG(cam_list, bg_img, fit_shape, w_step, margins, cam_shift_y):
+    fit_h, fit_w = fit_shape[0], fit_shape[1]
+    h_margin, w_margin = margins[0], margins[1]
+    i = 0
+    loc_bgIMG = bg_img.copy()
+
+    for cam in cam_list:
+        rsz_cam = cv2.resize(cam, (fit_w, fit_h))
+        rsz_cam = Yshift_img(rsz_cam, cam_shift_y[i], BLUE)
+        x_left = w_step * i + w_margin
+        x_right = x_left + fit_w
+        y_top = h_margin
+        y_bottom = h_margin + fit_h
+        loc_bgIMG[y_top:y_bottom, x_left:x_right, :] = rsz_cam
+        i = i+1
+
+    return loc_bgIMG
+
+
 def ctlThread():
     x_off = 0
     y_off = -50
-    blue = (255, 0, 0)
-    H = 640
-    W = 720
-    halfW = int(W/2)
+    BGdim = (640, 360)  # (w, h)
+
+    fit_shape, w_step, margins = 0, 0, 0
+    W2 = W*2
+    halfW = int(W2 / 2)
     name = "Video"
     cv2.namedWindow(name)
     cv2.namedWindow("Test")
-    cv2.namedWindow("twoperson")
+    # cv2.namedWindow("twoperson")
     imgBG = cv2.imread("background/Bar.jpg")
-    imgBG = cv2.resize(imgBG, (W, H))
+    imgBG = cv2.resize(imgBG, BGdim)
+    cam_added = True
 
     thread1 = camThread("Camera 0", 0)
     thread2 = camThread("Camera 1", 1)
-    thread3 = camThread("Camera 2", 2)
+    # thread3 = camThread("Camera 2", 2)
     thread1.start()
     thread2.start()
-    thread3.start()
+    # thread3.start()
+
 
     while True:
         global FRAMES
@@ -67,14 +115,19 @@ def ctlThread():
             cv2.imshow("twoperson", f2)
 
         if f0 is not None and f1 is not None:
+            # f0 = cv2.resize(f0, (halfW, H))
+            # f1 = cv2.resize(f1, (halfW, H))
+            # f0 = Yshift_img(f0, y_off, BLUE)
 
-            f0 = cv2.resize(f0, (halfW, H))
-            f1 = cv2.resize(f1, (halfW, H))
-            f0 = Yshift_img(f0, y_off, blue)
+            cam_list = [f0, f1]
 
-            imgStacked = cvzone.stackImages([f0, f1], 2, 1)
+            if cam_added:
+                fit_shape, w_step, margins = stackParam(cam_list, imgBG.shape)
+                cam_added = False
+            cam_shift_y = [10, 0]
+            imgStacked = stackIMG(cam_list, imgBG, fit_shape, w_step, margins, cam_shift_y)
 
-            temp = np.subtract(imgStacked, blue)
+            temp = np.subtract(imgStacked, BLUE)
 
             # Transparent mask stores boolean value
             mask = (temp == (0, 0, 0))
@@ -118,25 +171,26 @@ class camThread(threading.Thread):
 
     def run(self):
         print("Starting " + self.previewName)
-        segmentor = SelfiSegmentation() #setup BGremover
+        segmentor = SelfiSegmentation()  # setup BGremover
         camPreview(self.previewName, self.camID, segmentor)
 
 
 def camPreview(previewName, camID, segmentor):
     # cv2.namedWindow(previewName)
 
+    # cam = vids[camID]
+
     # Real time video cap
-    # cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
-    cam = vids[camID]
-    # cv2.flip()
-    # cam.set(3, 640)  # width
-    # cam.set(4, 360)  # height
+    cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
+
+    cam.set(3, W)  # width
+    cam.set(4, H)  # height
 
     drawing_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=1, circle_radius=1)
 
     with mp_face_mesh.FaceMesh(
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
     ) as face_mesh:
         while cam.isOpened():
             success, frame = cam.read()
@@ -163,7 +217,6 @@ def camPreview(previewName, camID, segmentor):
             if results.multi_face_landmarks:
 
                 for face_landmarks in results.multi_face_landmarks:
-
                     mp_drawing.draw_landmarks(
                         image=frame,
                         landmark_list=face_landmarks,
@@ -183,7 +236,6 @@ def camPreview(previewName, camID, segmentor):
 
 thread0 = threading.Thread(target=ctlThread)
 thread0.start()
-
 
 # cap0 = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 # cap1 = cv2.VideoCapture(1)
