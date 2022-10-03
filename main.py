@@ -76,7 +76,7 @@ def stackIMG(cam_list, bg_img, fit_shape, w_step, margins, cam_shift_y):
         y_top = h_margin
         y_bottom = h_margin + fit_h
         loc_bgIMG[y_top:y_bottom, x_left:x_right, :] = rsz_cam
-        i = i+1
+        i += 1
 
     return loc_bgIMG
 
