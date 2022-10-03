@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-import pyautogui as pg
+# import pyautogui as pg
 
 cam = cv2.VideoCapture(1, cv2.CAP_DSHOW)
 cam.set(3, 640)  # width
@@ -34,7 +34,7 @@ while cam.isOpened():
         # stored_lines = lines
         line_image = image.copy()
 
-        if counter > 30:
+        if counter > 100:
             counter = 0
             # max_key = max(len(item) for item in stored_lines.values())
             max_key = max(stored_lines, key=lambda x:len(stored_lines[x]))
@@ -50,11 +50,13 @@ while cam.isOpened():
                     dx = x1 - x2
                     if np.abs(dy) < np.abs(dx)*0.12:
                         # cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
-                        slope = round(100*dy/dx)
-                        if stored_lines.get(slope) is None:
-                            stored_lines[slope] = [line]
+                        slope = round(dy/dx, 3)
+                        midpoint = round((y1+y2)/20)*10
+                        key = slope + midpoint
+                        if stored_lines.get(key) is None:
+                            stored_lines[key] = [line]
                         else:
-                            stored_lines[slope].append(line)
+                            stored_lines[key].append(line)
                         print(stored_lines)
                         counter += 1
 
