@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 TANSLOP = np.tan(10)
 
-cam = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+cam = cv2.VideoCapture(3, cv2.CAP_DSHOW)
 cam.set(3, 640)  # width
 cam.set(4, 360)  # height
 rawimage = cv2.imread("vid/test1.jpg")
@@ -33,7 +33,7 @@ while cam.isOpened():
         blurred = cv2.GaussianBlur(grey, (21, 7), 0)
         edged = cv2.Canny(blurred, threshold1=10, threshold2=50)
         lines = cv2.HoughLinesP(edged, 1, np.pi / 180,
-                                threshold=15, lines=np.array([]), minLineLength=60, maxLineGap=3)
+                                threshold=15, lines=np.array([]), minLineLength=30, maxLineGap=3)
         # stored_lines = lines
         line_image = cropped_image.copy()
 
@@ -53,7 +53,7 @@ while cam.isOpened():
                     dx = x1 - x2
                     cv2.line(line_image, (x1, y1), (x2, y2), (0, 0, 255), 2)
                     if np.abs(dy) < np.abs(dx)*TANSLOP:
-                        # cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
+                        cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
                         slope = round(dy/dx, 3)
                         midpoint = round((y1+y2)/20)
                         key = slope + midpoint
@@ -67,7 +67,7 @@ while cam.isOpened():
         if lines_denoised:
             for line_denoised in lines_denoised:
                 for x1, y1, x2, y2 in line_denoised:
-                    cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
+                    cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
         # elif stored_lines:
         #     print(stored_lines)
