@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 TANSLOP = np.tan(10)
 
-cam = cv2.VideoCapture(3, cv2.CAP_DSHOW)
+cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 cam.set(3, 640)  # width
 cam.set(4, 360)  # height
 rawimage = cv2.imread("vid/test1.jpg")
