@@ -97,8 +97,8 @@ def ctlThread():
     imgBG = cv2.resize(imgBG, BGdim)
     cam_added = True
 
-    thread1 = camThread("Camera 0", 0)
-    thread2 = camThread("Camera 1", 1)
+    thread1 = CamThread("Camera 0", 0)
+    thread2 = CamThread("Camera 1", 1)
     # thread3 = camThread("Camera 2", 2)
     thread1.start()
     thread2.start()
@@ -163,7 +163,7 @@ def ctlThread():
     cv2.destroyWindow(name)
 
 
-class camThread(threading.Thread):
+class CamThread(threading.Thread):
     def __init__(self, previewName, camID):
         threading.Thread.__init__(self)
         self.previewName = previewName
