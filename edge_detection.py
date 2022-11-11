@@ -14,12 +14,8 @@ cam.set(4, 360)  # height
 # frame = cv2.resize(frame.copy(), (640, 480))
 
 
-# stored_lines = {}
-# lines_denoised = []
-# counter = 0
-
-
-class EdgeCollection:
+class EdgeDetection:
+    edge_height = 0
     stored_lines = {}
     lines_denoised = []
     counter = 0
@@ -58,14 +54,14 @@ def process_frame(portrait_frame):
     im = cv2.filter2D(cropped_image, -1, kernel)
     cv2.imshow("Sharpening", im)
     grey = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(grey, (21, 7), 0)
+    blurred = cv2.GaussianBlur(grey, (25, 7), 0)
+    cv2.imshow("After processed", blurred)
     edged = cv2.Canny(blurred, threshold1=10, threshold2=50)
     lines = cv2.HoughLinesP(edged, 1, np.pi / 180,
                             threshold=15, lines=np.array([]), minLineLength=30, maxLineGap=3)
     line_image = cropped_image.copy()
 
     if edge_coll.counter > 70:
-        debug_alllines = edge_coll.stored_lines
         edge_coll.filter_lines()
 
     if lines is not None:
@@ -82,20 +78,36 @@ def process_frame(portrait_frame):
                     cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
 
     if edge_coll.lines_denoised:
-        for line_denoised in edge_coll.lines_denoised:
-            for x1, y1, x2, y2 in line_denoised:
+        selected_lines = edge_coll.lines_denoised
+        x_values = []
+        y_values = []
+        for denoised_line in selected_lines:
+            for x1, y1, x2, y2 in denoised_line:
                 cv2.line(line_image, (x1, y1), (x2, y2), (255, 0, 0), 2)  # selected candidates
+                x_values.extend([x1, x2])
+                y_values.extend([y1, y2])
 
+        # calculate linear regression of selected samples
+        A = np.vstack([x_values, np.ones(len(x_values))]).T
+        y_values = np.array(y_values)[:, np.newaxis]
+        alpha = np.linalg.lstsq(A, y_values, rcond=None)[0]  # find linear least square regression
+        # https://pythonnumericalmethods.berkeley.edu/notebooks/chapter16.04-Least-Squares-Regression-in-Python.html
+        edge_coll.edge_height = np.mean(y_values)
+        w = line_image.shape[1]
+        a = alpha[0, 0]
+        b = alpha[1, 0]
+        cv2.line(line_image, (0, round(b)), (w, round((w*a+b))), (0, 255, 0), 2)
     cv2.imshow("lined image", line_image)
 
 
-edge_coll = EdgeCollection()
+
+edge_coll = EdgeDetection()
 
 while cam.isOpened():
     success, raw_frame = cam.read()
 
     if success:
-        frame = cv2.rotate(raw_frame, cv2.cv2.ROTATE_90_COUNTERCLOCKWISE)
+        frame = cv2.rotate(raw_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
         process_frame(frame)
         # while rawimage is not None:
         #     success = True
