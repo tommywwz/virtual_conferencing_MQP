@@ -41,12 +41,12 @@ def gen_key(line, slope):
     [x1, y1, x2, y2] = line[0, 0:4]
     midpoint = round((y1 + y2) / 20)
     # key = slope + midpoint
-    y_intercept = (y1-(slope * x1))/10
+    y_intercept = (y1 - (slope * x1)) / 10
     key = slope + round(y_intercept)
     return key
 
 
-def process_frame(portrait_frame):
+def process_frame(portrait_frame, threshold=70):
     cv2.imshow("raw", portrait_frame)
     h, w, c = portrait_frame.shape
     cropped_image = portrait_frame[int(np.floor(2 * h / 3)):h, :, :]
@@ -61,7 +61,7 @@ def process_frame(portrait_frame):
                             threshold=15, lines=np.array([]), minLineLength=30, maxLineGap=3)
     line_image = cropped_image.copy()
 
-    if edge_coll.counter > 70:
+    if edge_coll.counter > threshold:
         edge_coll.filter_lines()
 
     if lines is not None:
@@ -71,7 +71,7 @@ def process_frame(portrait_frame):
                 dx = x1 - x2
                 cv2.line(line_image, (x1, y1), (x2, y2), (0, 0, 255), 2)
                 if np.abs(dy) < np.abs(dx) * edge_coll.TANSLOP:
-                    slope = round(dy/dx, 1)
+                    slope = round(dy / dx, 1)
                     key = gen_key(line, slope)
 
                     edge_coll.add_lines(key=key, line=line)
@@ -96,9 +96,8 @@ def process_frame(portrait_frame):
         w = line_image.shape[1]
         a = alpha[0, 0]
         b = alpha[1, 0]
-        cv2.line(line_image, (0, round(b)), (w, round((w*a+b))), (0, 255, 0), 2)
+        cv2.line(line_image, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
     cv2.imshow("lined image", line_image)
-
 
 
 edge_coll = EdgeDetection()
@@ -107,8 +106,8 @@ while cam.isOpened():
     success, raw_frame = cam.read()
 
     if success:
-        frame = cv2.rotate(raw_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        process_frame(frame)
+        # frame = cv2.rotate(raw_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        process_frame(raw_frame, 40)
         # while rawimage is not None:
         #     success = True
 
