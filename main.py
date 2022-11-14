@@ -8,10 +8,13 @@ import mediapipe as mp
 import time
 import os
 
-FRAMES = np.empty(3, dtype=object)
-TERM = False
+import edge_detection
+
+# FRAMES = np.empty(3, dtype=object)
+# TERM = False
 W = 640
 H = 360
+SHAPE = (W, H, 3)
 R = H / W  # aspect ratio using the ratio of height to width to improve the efficiency of stackIMG function
 BLUE = (255, 0, 0)
 
@@ -63,10 +66,10 @@ def stackParam(cam_list, bg_shape: int):
 
 
 def stackIMG(cam_list, bg_img, fit_shape, w_step, margins, cam_shift_y):
+    loc_bgIMG = bg_img.copy()
     fit_h, fit_w = fit_shape[0], fit_shape[1]
     h_margin, w_margin = margins[0], margins[1]
     i = 0
-    loc_bgIMG = bg_img.copy()
 
     for cam in cam_list:
         rsz_cam = cv2.resize(cam, (fit_w, fit_h))
@@ -79,6 +82,124 @@ def stackIMG(cam_list, bg_img, fit_shape, w_step, margins, cam_shift_y):
         i += 1
 
     return loc_bgIMG
+
+
+class CamManagement:
+    FRAMES = []
+    TERM = False
+    cam_id = 0
+    edge_position = []
+    empty_frame = np.zeros(SHAPE, dtype=np.uint8)
+
+    def open_cam(self):
+        name = "Camera %s" % str(self.cam_id)
+        camThread = CamThread(previewName=name, camID=self.cam_id)
+        camThread.start()
+        self.FRAMES.append(self.empty_frame)
+        self.edge_position.append((None, None))
+        self.cam_id += 1
+        return True
+
+    def save_frame(self, camID, frame):
+        self.FRAMES[camID] = frame
+
+    def get_frame(self):
+        return self.FRAMES.copy()
+
+    def set_Term(self, ifTerm: bool):
+        self.TERM = ifTerm
+
+    def check_Term(self):
+        return self.TERM
+
+    def save_edge(self, camID, edge):
+        self.edge_position[camID] = edge
+
+    def get_edge(self, camID):
+        return self.edge_position[camID]
+
+
+class CamThread(threading.Thread):
+    def __init__(self, previewName, camID):
+        threading.Thread.__init__(self)
+        self.previewName = previewName
+        self.camID = camID
+
+    def run(self):
+        print("Starting Thread" + self.previewName)
+        segmentor = SelfiSegmentation()  # setup BGremover
+        camPreview(self.previewName, self.camID, segmentor)
+
+
+def camPreview(previewName, camID, segmentor):
+    # cam = vids[camID]
+
+    # Real time video cap
+    cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
+    ed = edge_detection.EdgeDetection()
+
+    cam.set(3, W)  # width
+    cam.set(4, H)  # height
+
+    drawing_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=1, circle_radius=1)
+
+    with mp_face_mesh.FaceMesh(
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+    ) as face_mesh:
+        while cam.isOpened():
+            success, frame = cam.read()
+            if not success:
+                # skip if no frame
+                continue
+
+            # if camID != 2:
+            #     frame = cv2.resize(frame, (360, 640))
+            # else:
+            #     frame = cv2.resize(frame, (640, 360))
+            #     bg = cv2.resize(cv2.imread("background/Bar.jpg"), (640, 360))
+            #
+            #     frame_bgrmv = segmentor.removeBG(frame, bg, threshold=0.5)
+            #     CamMan.save_frame(camID=camID, frame=frame_bgrmv)
+            #     if CamMan.check_Term():
+            #         break
+            #     continue
+
+            frame = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
+            frame.flags.writeable = False
+            results = face_mesh.process(frame)
+            frame.flags.writeable = True
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            if results.multi_face_landmarks:
+                for face_landmarks in results.multi_face_landmarks:
+                    mp_drawing.draw_landmarks(
+                        image=frame,
+                        landmark_list=face_landmarks,
+                        connections=mp_face_mesh.FACEMESH_CONTOURS,
+                        landmark_drawing_spec=drawing_spec,
+                        connection_drawing_spec=drawing_spec
+                    )
+
+            edge = ed.process_frame(frame)
+            a, b = edge
+
+            if ed.lines_denoised:
+                for denoised_line in ed.lines_denoised:
+                    for x1, y1, x2, y2 in denoised_line:
+                        cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+
+            if a is not None and b is not None:
+                cv2.line(frame, (0, round(b)), (W, round((W * a + b))), (0, 255, 0), 2)
+
+            CamMan.save_edge(camID, edge)
+            print("cam" + str(camID) + str(CamMan.get_edge(camID)))
+
+            # frame_bgrmv = segmentor.removeBG(frame, (255, 0, 0), threshold=0.5)
+            CamMan.save_frame(camID=camID, frame=frame)
+            if CamMan.check_Term():
+                break
+        print("Exiting " + previewName)
+        cam.release()
 
 
 def ctlThread():
@@ -97,143 +218,62 @@ def ctlThread():
     imgBG = cv2.resize(imgBG, BGdim)
     cam_added = True
 
-    thread1 = CamThread("Camera 0", 0)
-    thread2 = CamThread("Camera 1", 1)
-    # thread3 = camThread("Camera 2", 2)
-    thread1.start()
-    thread2.start()
-    # thread3.start()
-
+    CamMan.open_cam()
+    # CamMan.open_cam()
+    # thread1 = CamThread("Camera 0", 0)
+    # thread2 = CamThread("Camera 1", 1)
+    # # thread3 = camThread("Camera 2", 2)
+    # thread1.start()
+    # thread2.start()
+    # # thread3.start()
 
     while True:
-        global FRAMES
-        f0 = FRAMES[0]
-        f1 = FRAMES[1]
-        f2 = FRAMES[2]
+        frames = CamMan.get_frame()
 
-        if f2 is not None:
-            cv2.imshow("twoperson", f2)
+        if cam_added:
+            fit_shape, w_step, margins = stackParam(frames, imgBG.shape)
+            cam_added = False
 
-        if f0 is not None and f1 is not None:
-            # f0 = cv2.resize(f0, (halfW, H))
-            # f1 = cv2.resize(f1, (halfW, H))
-            # f0 = Yshift_img(f0, y_off, BLUE)
+        cam_shift_y = [10, 0]
+        imgStacked = stackIMG(frames, imgBG, fit_shape, w_step, margins, cam_shift_y)
 
-            cam_list = [f0, f1]
+        temp = np.subtract(imgStacked, BLUE)
 
-            if cam_added:
-                fit_shape, w_step, margins = stackParam(cam_list, imgBG.shape)
-                cam_added = False
-            cam_shift_y = [10, 0]
-            imgStacked = stackIMG(cam_list, imgBG, fit_shape, w_step, margins, cam_shift_y)
+        # Transparent mask stores boolean value
+        mask = (temp == (0, 0, 0))
+        mask_singleCH = (mask[:, :, 0] & mask[:, :, 1] & mask[:, :, 2])
 
-            temp = np.subtract(imgStacked, BLUE)
+        alpha = np.zeros(imgStacked.shape, dtype=np.uint8)
+        imgBG_output = imgBG.copy()
+        # imgBG_output[mask_bin, :] = imgBG[mask_bin, :]
+        imgBG_output[~mask_singleCH, :] = imgStacked[~mask_singleCH, :]
 
-            # Transparent mask stores boolean value
-            mask = (temp == (0, 0, 0))
-            mask_singleCH = (mask[:, :, 0] & mask[:, :, 1] & mask[:, :, 2])
+        alpha[mask_singleCH] = 0
+        alpha[~mask_singleCH] = 255
+        alpha_grey = cv2.cvtColor(alpha, cv2.COLOR_BGR2GRAY)
 
-            alpha = np.zeros(imgStacked.shape, dtype=np.uint8)
-            imgBG_output = imgBG.copy()
-            # imgBG_output[mask_bin, :] = imgBG[mask_bin, :]
-            imgBG_output[~mask_singleCH, :] = imgStacked[~mask_singleCH, :]
+        contours, hierarchy = cv2.findContours(alpha_grey.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        image_copy = imgBG_output.copy()
+        cv2.drawContours(image=image_copy, contours=contours, contourIdx=-1, color=(0, 255, 0), thickness=1,
+                         lineType=cv2.LINE_AA)
+        blurred_img = cv2.GaussianBlur(imgBG_output, (9, 9), 0)
+        output = np.where(mask == np.array([0, 255, 0]), blurred_img, imgBG_output)
+        # BG = imgBG.copy()
+        # BG[0:640, 0:720, :] = cv2.cvtColor(imgStackedGBRA, cv2.COLOR_BGRA2BGR)
+        # imgDisplay = imgBG.copy()
+        # imgDisplay [0:848, 0:480, :] = f0[0:848, 0:480, :]
 
-            alpha[mask_singleCH] = 0
-            alpha[~mask_singleCH] = 255
-            alpha_grey = cv2.cvtColor(alpha, cv2.COLOR_BGR2GRAY)
-
-            contours, hierarchy = cv2.findContours(alpha_grey.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            image_copy = imgBG_output.copy()
-            cv2.drawContours(image=image_copy, contours=contours, contourIdx=-1, color=(0, 255, 0), thickness=1,
-                             lineType=cv2.LINE_AA)
-            blurred_img = cv2.GaussianBlur(imgBG_output, (9, 9), 0)
-            output = np.where(mask == np.array([0, 255, 0]), blurred_img, imgBG_output)
-            # BG = imgBG.copy()
-            # BG[0:640, 0:720, :] = cv2.cvtColor(imgStackedGBRA, cv2.COLOR_BGRA2BGR)
-            # imgDisplay = imgBG.copy()
-            # imgDisplay [0:848, 0:480, :] = f0[0:848, 0:480, :]
-
-            cv2.imshow(name, imgBG_output)
-            cv2.imshow("Test", alpha_grey)
+        cv2.imshow(name, imgBG_output)
+        cv2.imshow("Test", alpha_grey)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-    global TERM
-    TERM = True
+
+    CamMan.set_Term(True)
     cv2.destroyWindow(name)
 
 
-class CamThread(threading.Thread):
-    def __init__(self, previewName, camID):
-        threading.Thread.__init__(self)
-        self.previewName = previewName
-        self.camID = camID
-
-    def run(self):
-        print("Starting " + self.previewName)
-        segmentor = SelfiSegmentation()  # setup BGremover
-        camPreview(self.previewName, self.camID, segmentor)
-
-
-def camPreview(previewName, camID, segmentor):
-    # cv2.namedWindow(previewName)
-
-    # cam = vids[camID]
-
-    # Real time video cap
-    cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
-
-    cam.set(3, W)  # width
-    cam.set(4, H)  # height
-
-    drawing_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=1, circle_radius=1)
-
-    with mp_face_mesh.FaceMesh(
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-    ) as face_mesh:
-        while cam.isOpened():
-            success, frame = cam.read()
-            if not success:
-                # print("empty frame!")
-                continue
-
-            if camID != 2:
-                frame = cv2.resize(frame, (360, 640))
-            else:
-                frame = cv2.resize(frame, (640, 360))
-                bg = cv2.resize(cv2.imread("background/Bar.jpg"), (640, 360))
-
-                FRAMES[camID] = segmentor.removeBG(frame, bg, threshold=0.5)
-                if TERM:
-                    break
-                continue
-
-            frame = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
-            frame.flags.writeable = False
-            results = face_mesh.process(frame)
-            frame.flags.writeable = True
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            if results.multi_face_landmarks:
-
-                for face_landmarks in results.multi_face_landmarks:
-                    mp_drawing.draw_landmarks(
-                        image=frame,
-                        landmark_list=face_landmarks,
-                        connections=mp_face_mesh.FACEMESH_CONTOURS,
-                        landmark_drawing_spec=drawing_spec,
-                        connection_drawing_spec=drawing_spec
-                    )
-
-            FRAMES[camID] = segmentor.removeBG(frame, (255, 0, 0), threshold=0.5)
-            # FRAMES[camID] = frame
-
-            if TERM:
-                break
-        print("Exiting " + previewName)
-        cam.release()
-
-
+CamMan = CamManagement()
 thread0 = threading.Thread(target=ctlThread)
 thread0.start()
 
