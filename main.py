@@ -12,8 +12,8 @@ import edge_detection
 
 # FRAMES = np.empty(3, dtype=object)
 # TERM = False
-W = 640
-H = 360
+W = 360
+H = 640
 SHAPE = (W, H, 3)
 R = H / W  # aspect ratio using the ratio of height to width to improve the efficiency of stackIMG function
 BLUE = (255, 0, 0)
@@ -71,7 +71,8 @@ def stackIMG(cam_list, bg_img, fit_shape, w_step, margins, cam_shift_y):
     h_margin, w_margin = margins[0], margins[1]
     i = 0
 
-    for cam in cam_list:
+    for key in cam_list:
+        cam = cam_list[key]
         rsz_cam = cv2.resize(cam, (fit_w, fit_h))
         rsz_cam = Yshift_img(rsz_cam, cam_shift_y[i], BLUE)
         x_left = w_step * i + w_margin
@@ -85,19 +86,19 @@ def stackIMG(cam_list, bg_img, fit_shape, w_step, margins, cam_shift_y):
 
 
 class CamManagement:
-    FRAMES = []
+    FRAMES = {}
     TERM = False
     cam_id = 0
-    edge_position = []
+    edge_position = {}
     empty_frame = np.zeros(SHAPE, dtype=np.uint8)
 
-    def open_cam(self):
-        name = "Camera %s" % str(self.cam_id)
-        camThread = CamThread(previewName=name, camID=self.cam_id)
+    def open_cam(self, camID=cam_id):
+        name = "Camera %s" % str(camID)
+        camThread = CamThread(previewName=name, camID=camID)
         camThread.start()
-        self.FRAMES.append(self.empty_frame)
-        self.edge_position.append((None, None))
-        self.cam_id += 1
+        self.FRAMES[camID] = self.empty_frame
+        self.edge_position[camID] = [None, None]
+        self.cam_id += 1  # camera conflicts need to be fixed here
         return True
 
     def save_frame(self, camID, frame):
@@ -138,8 +139,8 @@ def camPreview(previewName, camID, segmentor):
     cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
     ed = edge_detection.EdgeDetection()
 
-    cam.set(3, W)  # width
-    cam.set(4, H)  # height
+    cam.set(3, 640)  # width
+    cam.set(4, 360)  # height
 
     drawing_spec = mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=1, circle_radius=1)
 
@@ -149,6 +150,10 @@ def camPreview(previewName, camID, segmentor):
     ) as face_mesh:
         while cam.isOpened():
             success, frame = cam.read()
+
+            frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            h, w, c = frame.shape
+
             if not success:
                 # skip if no frame
                 continue
@@ -183,21 +188,18 @@ def camPreview(previewName, camID, segmentor):
             edge = ed.process_frame(frame)
             a, b = edge
 
-            if ed.lines_denoised:
-                for denoised_line in ed.lines_denoised:
-                    for x1, y1, x2, y2 in denoised_line:
-                        cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
-
             if a is not None and b is not None:
-                cv2.line(frame, (0, round(b)), (W, round((W * a + b))), (0, 255, 0), 2)
+                b += np.floor(h * 2 / 3)
+                cv2.line(frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
 
+            frame_bgrmv = segmentor.removeBG(frame, (255, 0, 0), threshold=0.5)
+            CamMan.save_frame(camID=camID, frame=frame)
             CamMan.save_edge(camID, edge)
             print("cam" + str(camID) + str(CamMan.get_edge(camID)))
 
-            # frame_bgrmv = segmentor.removeBG(frame, (255, 0, 0), threshold=0.5)
-            CamMan.save_frame(camID=camID, frame=frame)
             if CamMan.check_Term():
                 break
+
         print("Exiting " + previewName)
         cam.release()
 
@@ -218,7 +220,8 @@ def ctlThread():
     imgBG = cv2.resize(imgBG, BGdim)
     cam_added = True
 
-    CamMan.open_cam()
+    CamMan.open_cam(camID=3)
+    CamMan.open_cam(camID=5)
     # CamMan.open_cam()
     # thread1 = CamThread("Camera 0", 0)
     # thread2 = CamThread("Camera 1", 1)

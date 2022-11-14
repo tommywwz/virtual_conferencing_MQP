@@ -95,15 +95,15 @@ class EdgeDetection:
             w = line_image.shape[1]
             a = alpha[0, 0]
             b = alpha[1, 0]
+            cv2.line(line_image, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
             if debug:
-                cv2.line(line_image, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
                 cv2.imshow("after processing", line_image)
-            retval = (a, b)
+            retval = [a, b]
 
         else:
-            retval = (None, None)
+            retval = [None, None]
 
-        print(retval)
+        # print(retval)
         return retval
     # cv2.imshow("lined image", line_image)
 
