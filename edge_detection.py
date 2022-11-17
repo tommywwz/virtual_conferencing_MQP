@@ -3,12 +3,8 @@ import numpy as np
 
 # import pyautogui as pg
 
+debug = test = False
 
-cam = cv2.VideoCapture(1, cv2.CAP_DSHOW)
-cam.set(3, 640)  # width
-cam.set(4, 360)  # height
-debug = False
-test = False
 
 # frame = cv2.imread("vid/test1.jpg")
 # frame = cv2.resize(frame.copy(), (640, 480))
@@ -116,7 +112,7 @@ if test:
 
     # => opencv_index: 0, device_name: Integrated Webcam
 
-    cam = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+    cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     cam.set(3, 640)
     cam.set(4, 360)
     ed = EdgeDetection()

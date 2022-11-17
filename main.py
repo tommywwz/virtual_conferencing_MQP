@@ -6,12 +6,14 @@ import cvzone
 from cvzone.SelfiSegmentationModule import SelfiSegmentation
 import mediapipe as mp
 import time
+import logging
 import os
 
 import edge_detection
 
-# FRAMES = np.empty(3, dtype=object)
-# TERM = False
+logging.basicConfig(level=logging.DEBUG)
+
+
 W = 360
 H = 640
 SHAPE = (W, H, 3)
@@ -43,11 +45,11 @@ def Yshift_img(vector, y_off, fill_clr=(0, 0, 0)):
     return img_out
 
 
-def stackParam(cam_list, bg_shape: int):
+def stackParam(cam_dict, bg_shape: int):
     # should be called everytime a new cam joined
     # return: fit_width, number of image to stack, spacing for each camera,
     bg_h, bg_w, bg_c = bg_shape
-    num_of_cam = len(cam_list)
+    num_of_cam = len(cam_dict)
     w_step = int(np.floor(bg_w / num_of_cam))
     fit_width = w_step
     fit_height = np.floor(fit_width * R)
@@ -65,14 +67,14 @@ def stackParam(cam_list, bg_shape: int):
     return fit_shape, w_step, margins
 
 
-def stackIMG(cam_list, bg_img, fit_shape, w_step, margins, cam_shift_y):
+def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_shift_y):
     loc_bgIMG = bg_img.copy()
     fit_h, fit_w = fit_shape[0], fit_shape[1]
     h_margin, w_margin = margins[0], margins[1]
     i = 0
 
-    for key in cam_list:
-        cam = cam_list[key]
+    for key in cam_dict:
+        cam = cam_dict[key]
         rsz_cam = cv2.resize(cam, (fit_w, fit_h))
         rsz_cam = Yshift_img(rsz_cam, cam_shift_y[i], BLUE)
         x_left = w_step * i + w_margin
@@ -96,6 +98,8 @@ class CamManagement:
         name = "Camera %s" % str(camID)
         camThread = CamThread(previewName=name, camID=camID)
         camThread.start()
+        time.sleep(0.5)
+        logging.info("%s: starting", name)
         self.FRAMES[camID] = self.empty_frame
         self.edge_position[camID] = [None, None]
         self.cam_id += 1  # camera conflicts need to be fixed here
@@ -134,7 +138,7 @@ class CamThread(threading.Thread):
 
 def camPreview(previewName, camID, segmentor):
     # cam = vids[camID]
-
+    cv2.namedWindow("iso frame " + str(camID))
     # Real time video cap
     cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
     ed = edge_detection.EdgeDetection()
@@ -194,8 +198,8 @@ def camPreview(previewName, camID, segmentor):
 
             frame_bgrmv = segmentor.removeBG(frame, (255, 0, 0), threshold=0.5)
             CamMan.save_frame(camID=camID, frame=frame)
-            CamMan.save_edge(camID, edge)
-            print("cam" + str(camID) + str(CamMan.get_edge(camID)))
+            # CamMan.save_edge(camID, edge)
+            # logging.debug("cam" + str(camID) + str(CamMan.get_edge(camID)))
 
             if CamMan.check_Term():
                 break
@@ -214,14 +218,14 @@ def ctlThread():
     halfW = int(W2 / 2)
     name = "Video"
     cv2.namedWindow(name)
-    cv2.namedWindow("Test")
+
     # cv2.namedWindow("twoperson")
     imgBG = cv2.imread("background/Bar.jpg")
     imgBG = cv2.resize(imgBG, BGdim)
     cam_added = True
 
-    CamMan.open_cam(camID=3)
-    CamMan.open_cam(camID=5)
+    CamMan.open_cam(camID=1)
+    CamMan.open_cam(camID=0)
     # CamMan.open_cam()
     # thread1 = CamThread("Camera 0", 0)
     # thread2 = CamThread("Camera 1", 1)
@@ -237,7 +241,7 @@ def ctlThread():
             fit_shape, w_step, margins = stackParam(frames, imgBG.shape)
             cam_added = False
 
-        cam_shift_y = [10, 0]
+        cam_shift_y = {0: 10, 1: 0}
         imgStacked = stackIMG(frames, imgBG, fit_shape, w_step, margins, cam_shift_y)
 
         temp = np.subtract(imgStacked, BLUE)
@@ -270,6 +274,7 @@ def ctlThread():
         cv2.imshow("Test", alpha_grey)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
+
             break
 
     CamMan.set_Term(True)
@@ -277,8 +282,10 @@ def ctlThread():
 
 
 CamMan = CamManagement()
+logging.info("Starting Control Thread")
 thread0 = threading.Thread(target=ctlThread)
 thread0.start()
+
 
 # cap0 = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 # cap1 = cv2.VideoCapture(1)
