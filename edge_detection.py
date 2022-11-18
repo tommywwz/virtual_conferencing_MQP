@@ -20,18 +20,19 @@ def gen_key(line, slope):
 
 
 class EdgeDetection:
-    edge_height = 0
-    stored_lines = {}
-    lines_denoised = []
-    counter = 0
-    TANSLOP = np.tan(10)
+    def __init__(self):
+        self.edge_height = 0
+        self.stored_lines = {}
+        self.lines_denoised = []
+        self.counter = 0
+        self.TANSLOP = np.tan(10)
 
     def add_lines(self, key, line):
         if self.stored_lines.get(key) is None:
             self.stored_lines[key] = [line]
         else:
             self.stored_lines[key].append(line)
-        # print(self.stored_lines)
+        # print("counter: %d" % self.counter)
         self.counter += 1
 
     def filter_lines(self):
@@ -56,9 +57,6 @@ class EdgeDetection:
                                 threshold=15, lines=np.array([]), minLineLength=30, maxLineGap=3)
         line_image = cropped_image.copy()
 
-        if self.counter > threshold:
-            self.filter_lines()
-
         if lines is not None:
             for line in lines:
                 for x1, y1, x2, y2 in line:
@@ -71,6 +69,9 @@ class EdgeDetection:
 
                         self.add_lines(key=key, line=line)
                         cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
+
+        if self.counter > threshold:
+            self.filter_lines()
 
         if self.lines_denoised:
             selected_lines = self.lines_denoised

@@ -138,7 +138,7 @@ class CamThread(threading.Thread):
 
 def camPreview(previewName, camID, segmentor):
     # cam = vids[camID]
-    cv2.namedWindow("iso frame " + str(camID))
+    # cv2.namedWindow("iso frame " + str(camID))
     # Real time video cap
     cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
     ed = edge_detection.EdgeDetection()
@@ -189,10 +189,11 @@ def camPreview(previewName, camID, segmentor):
                         connection_drawing_spec=drawing_spec
                     )
 
-            edge = ed.process_frame(frame)
+            edge= ed.process_frame(frame)
             a, b = edge
 
             if a is not None and b is not None:
+                print("Cam:" + str(camID) + "address of edge: ", id(edge))
                 b += np.floor(h * 2 / 3)
                 cv2.line(frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
 
@@ -271,7 +272,7 @@ def ctlThread():
         # imgDisplay [0:848, 0:480, :] = f0[0:848, 0:480, :]
 
         cv2.imshow(name, imgBG_output)
-        cv2.imshow("Test", alpha_grey)
+        # cv2.imshow("Test", alpha_grey)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
 
