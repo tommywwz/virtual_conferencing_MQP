@@ -13,11 +13,13 @@ import edge_detection
 
 logging.basicConfig(level=logging.DEBUG)
 
-
-W = 360
-H = 640
-SHAPE = (W, H, 3)
-R = H / W  # aspect ratio using the ratio of height to width to improve the efficiency of stackIMG function
+BG_W = 640
+BG_H = 360
+BG_DIM = (BG_W, BG_H)  # (w, h)
+CAM_W = 360
+CAM_H = 640
+SHAPE = (CAM_W, CAM_H, 3)
+R = CAM_H / CAM_W  # aspect ratio using the ratio of height to width to improve the efficiency of stackIMG function
 BLUE = (255, 0, 0)
 
 vid1 = cv2.VideoCapture("vid/Single_User_View_1(WideAngle).MOV")
@@ -29,17 +31,19 @@ mp_drawing = mp.solutions.drawing_utils
 mp_face_mesh = mp.solutions.face_mesh
 
 
-def Yshift_img(vector, y_off, fill_clr=(0, 0, 0)):
-    h, w, c = vector.shape
+def Yshift_img(img_vector, y_offset: int, fill_clr=(0, 0, 0)):
+    # y_offset: positive: upward shifting; negative: downward shifting
 
-    blank = np.full(shape=(np.abs(y_off), w, c), fill_value=fill_clr)
-    if y_off > 0:
-        stack_img = np.vstack((vector, blank))
+    h, w, c = img_vector.shape
+
+    blank = np.full(shape=(np.abs(y_offset), w, c), fill_value=fill_clr)
+    if y_offset > 0:
+        stack_img = np.vstack((img_vector, blank))
         h1, w1, c1 = stack_img.shape
         h = h1 - h
         img_out = stack_img[h:h1, 0:w, :]
     else:
-        stack_img = np.vstack((blank, vector))
+        stack_img = np.vstack((blank, img_vector))
         img_out = stack_img[0:h, 0:w, :]
 
     return img_out
@@ -58,7 +62,7 @@ def stackParam(cam_dict, bg_shape: int):
         fit_width = np.floor(bg_h / R)
         fit_height = bg_h
 
-    fit_shape = [int(fit_height), int(fit_width)]
+    fit_shape = (int(fit_height), int(fit_width))
 
     margin_h = np.floor((bg_h - fit_height) / 2)
     margin_w = np.floor((w_step - fit_width) / 2)
@@ -69,14 +73,14 @@ def stackParam(cam_dict, bg_shape: int):
 
 def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_shift_y):
     loc_bgIMG = bg_img.copy()
-    fit_h, fit_w = fit_shape[0], fit_shape[1]
+    fit_h, fit_w = fit_shape
     h_margin, w_margin = margins[0], margins[1]
     i = 0
 
-    for key in cam_dict:
-        cam = cam_dict[key]
-        rsz_cam = cv2.resize(cam, (fit_w, fit_h))
-        rsz_cam = Yshift_img(rsz_cam, cam_shift_y[i], BLUE)
+    for camID in cam_dict:
+        frame = cam_dict[camID]
+        rsz_cam = cv2.resize(frame, (fit_w, fit_h))
+        rsz_cam = Yshift_img(rsz_cam, cam_shift_y[camID], BLUE)
         x_left = w_step * i + w_margin
         x_right = x_left + fit_w
         y_top = h_margin
@@ -88,11 +92,15 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_shift_y):
 
 
 class CamManagement:
-    FRAMES = {}
-    TERM = False
     cam_id = 0
-    edge_position = {}
-    empty_frame = np.zeros(SHAPE, dtype=np.uint8)
+    reference_y = np.floor(BG_DIM[1]*6/7)
+
+    def __init__(self):
+        self.FRAMES = {}
+        self.TERM = False
+        self.edge_lines = {}  # edge equation (a, b) for each cam
+        self.edge_y = {}  # average height of edge for each cam
+        self.empty_frame = np.zeros(SHAPE, dtype=np.uint8)
 
     def open_cam(self, camID=cam_id):
         name = "Camera %s" % str(camID)
@@ -101,7 +109,7 @@ class CamManagement:
         time.sleep(0.5)
         logging.info("%s: starting", name)
         self.FRAMES[camID] = self.empty_frame
-        self.edge_position[camID] = [None, None]
+        self.edge_lines[camID] = [None, None]
         self.cam_id += 1  # camera conflicts need to be fixed here
         return True
 
@@ -118,10 +126,23 @@ class CamManagement:
         return self.TERM
 
     def save_edge(self, camID, edge):
-        self.edge_position[camID] = edge
+        a, b = edge
+        if a is not None and b is not None:
+            self.edge_lines[camID] = edge
+            self.edge_y[camID] = int(np.floor(CAM_W * a / 2 + b))
 
-    def get_edge(self, camID):
-        return self.edge_position[camID]
+    def get_edge(self):
+        return self.edge_lines
+
+    def get_cam_offset(self):
+        offset = {}
+        for camID in self.FRAMES:
+            if camID in self.edge_y.keys():
+                background_y = np.floor(self.edge_y[camID]*BG_H/CAM_H)
+                offset[camID] = int(background_y - self.reference_y)
+            else:
+                offset[camID] = 0
+        return offset
 
 
 class CamThread(threading.Thread):
@@ -189,18 +210,16 @@ def camPreview(previewName, camID, segmentor):
                         connection_drawing_spec=drawing_spec
                     )
 
-            edge= ed.process_frame(frame)
+            edge = ed.process_frame(frame)
             a, b = edge
 
             if a is not None and b is not None:
-                print("Cam:" + str(camID) + "address of edge: ", id(edge))
-                b += np.floor(h * 2 / 3)
                 cv2.line(frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
 
+            CamMan.save_edge(camID, [a, b])
             frame_bgrmv = segmentor.removeBG(frame, (255, 0, 0), threshold=0.5)
             CamMan.save_frame(camID=camID, frame=frame)
-            # CamMan.save_edge(camID, edge)
-            # logging.debug("cam" + str(camID) + str(CamMan.get_edge(camID)))
+            logging.debug(str(CamMan.get_edge()))
 
             if CamMan.check_Term():
                 break
@@ -210,40 +229,39 @@ def camPreview(previewName, camID, segmentor):
 
 
 def ctlThread():
-    x_off = 0
-    y_off = -50
-    BGdim = (640, 360)  # (w, h)
-
     fit_shape, w_step, margins = 0, 0, 0
-    W2 = W*2
+    W2 = CAM_W * 2
     halfW = int(W2 / 2)
+    cam_loaded = 0
+
     name = "Video"
     cv2.namedWindow(name)
 
-    # cv2.namedWindow("twoperson")
     imgBG = cv2.imread("background/Bar.jpg")
-    imgBG = cv2.resize(imgBG, BGdim)
-    cam_added = True
+    imgBG = cv2.resize(imgBG, BG_DIM)
 
     CamMan.open_cam(camID=1)
     CamMan.open_cam(camID=0)
     # CamMan.open_cam()
-    # thread1 = CamThread("Camera 0", 0)
-    # thread2 = CamThread("Camera 1", 1)
-    # # thread3 = camThread("Camera 2", 2)
-    # thread1.start()
-    # thread2.start()
-    # # thread3.start()
 
     while True:
-        frames = CamMan.get_frame()
+        frame_dict = CamMan.get_frame()
+        if not frame_dict:
+            continue  # if frame dictionary is empty, continue
 
-        if cam_added:
-            fit_shape, w_step, margins = stackParam(frames, imgBG.shape)
-            cam_added = False
+        cam_count = len(frame_dict.keys())
+        if cam_count != cam_loaded:
+            cam_loaded = len(frame_dict.keys())
+            fit_shape, w_step, margins = stackParam(frame_dict, imgBG.shape)
 
-        cam_shift_y = {0: 10, 1: 0}
-        imgStacked = stackIMG(frames, imgBG, fit_shape, w_step, margins, cam_shift_y)
+        cam_offset_y = CamMan.get_cam_offset()
+
+        if cam_offset_y:
+            imgStacked = stackIMG(frame_dict, imgBG, fit_shape, w_step, margins, cam_offset_y)
+        else:
+            for cam in frame_dict:
+                cam_offset_y[cam] = 0
+            imgStacked = stackIMG(frame_dict, imgBG, fit_shape, w_step, margins, cam_offset_y)
 
         temp = np.subtract(imgStacked, BLUE)
 

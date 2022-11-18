@@ -95,6 +95,7 @@ class EdgeDetection:
             cv2.line(line_image, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
             if debug:
                 cv2.imshow("after processing", line_image)
+            b += np.floor(h * 2 / 3)  # convert to full frame coordinate
             retval = [a, b]
 
         else:
