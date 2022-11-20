@@ -7,6 +7,8 @@ counter = 0
 stb_tilt = 0
 tilt = []
 HIST = 10
+U = 700
+D = 100
 
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5)
@@ -15,8 +17,8 @@ mp_drawing = mp.solutions.drawing_utils
 
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 
-cap = cv2.VideoCapture(1)
-
+cap = cv2.VideoCapture(0)
+SampleWindow = cv2.imread("vid/solvay2.jpg")
 
 while cap.isOpened():
     success, image = cap.read()
@@ -101,8 +103,6 @@ while cap.isOpened():
             else:
                 text = "Forward"
 
-            SampleWindow = cv2.imread("vid/solvay2.jpg")
-
             if -10 <= y <= 10:
                 tilt.append(y)
             elif y < -10:
@@ -120,8 +120,6 @@ while cap.isOpened():
             if -10 <= stb_tilt <= 10:
                 L = round(550 + stb_tilt * 55)
                 R = round(1050 + stb_tilt * 55)
-                U = 700
-                D = 100
                 cv2.imshow("SampleWindow", SampleWindow[D:U, L:R])
             elif stb_tilt < -10:
                 cv2.imshow("SampleWindow", SampleWindow[D:U, 0:500])
