@@ -46,12 +46,17 @@ class EdgeDetection:
         if debug: cv2.imshow("raw", portrait_frame)
         h, w, c = portrait_frame.shape
         cropped_image = portrait_frame[int(np.floor(2 * h / 3)):h, :, :]
+        cropped_image = cv2.GaussianBlur(cropped_image, (11, 11), 0)
+        if debug: cv2.imshow("After first blur", cropped_image)
+
         kernel = np.array([[-2, -1, 0], [-1, 1, 1], [0, 1, 2]])
-        im = cv2.filter2D(cropped_image, -1, kernel)
-        if debug: cv2.imshow("Sharpening", im)
-        grey = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(grey, (25, 7), 0)
-        if debug: cv2.imshow("After processed", blurred)
+        emboss = cv2.filter2D(cropped_image, -1, kernel)
+        if debug: cv2.imshow("Sharpening", emboss)
+
+        grey = cv2.cvtColor(emboss, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(grey, (25, 9), 0)
+        if debug: cv2.imshow("After second blur", blurred)
+
         edged = cv2.Canny(blurred, threshold1=10, threshold2=50)
         lines = cv2.HoughLinesP(edged, 1, np.pi / 180,
                                 threshold=15, lines=np.array([]), minLineLength=30, maxLineGap=3)
@@ -114,7 +119,7 @@ if test:
 
     # => opencv_index: 0, device_name: Integrated Webcam
 
-    cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    cam = cv2.VideoCapture(1, cv2.CAP_DSHOW)
     cam.set(3, 640)
     cam.set(4, 360)
     ed = EdgeDetection()
@@ -126,69 +131,7 @@ if test:
             cv2.imshow("original", raw_frame)
             raw_frame = cv2.rotate(raw_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
             ed.process_frame(raw_frame, 90)
-            # while rawimage is not None:
-            #     success = True
-    #
-    #         # if success:
-    #         #     rawimage = cv2.rotate(rawimage, cv2.cv2.ROTATE_90_COUNTERCLOCKWISE)
-    #         #     cv2.imshow("raw", rawimage)
-    #         #     h, w, c = rawimage.shape
-    #         #     cropped_image = rawimage[int(np.floor(2 * h / 3)):h, :, :]
-    #         #     kernel = np.array([[-2, -1, 0], [-1, 1, 1], [0, 1, 2]])
-    #         #     im = cv2.filter2D(cropped_image, -1, kernel)
-    #         #     cv2.imshow("Sharpening", im)
-    #         #     grey = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-    #         #     blurred = cv2.GaussianBlur(grey, (21, 7), 0)
-    #         #     edged = cv2.Canny(blurred, threshold1=10, threshold2=50)
-    #         #     lines = cv2.HoughLinesP(edged, 1, np.pi / 180,
-    #         #                             threshold=15, lines=np.array([]), minLineLength=30, maxLineGap=3)
-    #         #     # stored_lines = lines
-    #         #     line_image = cropped_image.copy()
-    #         #
-    #         #     if counter > 70:
-    #         #         counter = 0
-    #         #         # max_key = max(len(item) for item in stored_lines.values())
-    #         #         max_key = max(stored_lines, key=lambda x: len(stored_lines[x]))
-    #         #         lines_denoised = stored_lines.get(max_key)
-    #         #         stored_lines.clear()
-    #         #
-    #         #     if lines is not None:
-    #         #         # print(lines)
-    #         #         # stored_lines.clear()
-    #         #         for line in lines:
-    #         #             for x1, y1, x2, y2 in line:
-    #         #                 dy = y1 - y2
-    #         #                 dx = x1 - x2
-    #         #                 cv2.line(line_image, (x1, y1), (x2, y2), (0, 0, 255), 2)
-    #         #                 if np.abs(dy) < np.abs(dx) * TANSLOP:
-    #         #                     cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
-    #         #                     slope = round(dy / dx, 3)
-    #         #                     midpoint = round((y1 + y2) / 20)
-    #         #                     key = slope + midpoint
-    #         #                     if stored_lines.get(key) is None:
-    #         #                         stored_lines[key] = [line]
-    #         #                     else:
-    #         #                         stored_lines[key].append(line)
-    #         #                     print(stored_lines)
-    #         #                     counter += 1
-    #         #
-    #         #     if lines_denoised:
-    #         #         for line_denoised in lines_denoised:
-    #         #             for x1, y1, x2, y2 in line_denoised:
-    #         #                 cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-    #         #
-    #         #     # elif stored_lines:
-    #         #     #     print(stored_lines)
-    #         #     #     for lines in stored_lines.values():
-    #         #     #         for line in lines:
-    #         #     #             for x1, y1, x2, y2 in line:
-    #         #     #                 cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
-    #         #
-    #         #     # line_image = cv2.addWeighted(image, 1, line_image, 1, 0)
-    #         #     cv2.imshow("Original image", cropped_image)
-    #         #     cv2.imshow("Blured image", blurred)
-    #         #     cv2.imshow("Edged image", edged)
-    #         #     cv2.imshow("Lined image", line_image)
+
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 cam.release()
                 break
