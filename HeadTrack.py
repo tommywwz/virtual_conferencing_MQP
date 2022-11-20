@@ -3,6 +3,10 @@ import mediapipe as mp
 import numpy as np
 import time
 
+counter = 0
+stb_tilt = 0
+tilt = []
+HIST = 10
 
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5)
@@ -99,14 +103,27 @@ while cap.isOpened():
 
             SampleWindow = cv2.imread("vid/solvay2.jpg")
 
-            tilt = round(y)
             if -10 <= y <= 10:
-                L = 550 + tilt * 55
-                R = 1050 + tilt * 55
+                tilt.append(y)
+            elif y < -10:
+                tilt.append(-10)
+            else:
+                tilt.append(10)
+
+            del tilt[0]
+            if len(tilt) < HIST:
+                tilt.append(y)
+
+            print(len(tilt))
+            stb_tilt = np.mean(tilt)
+
+            if -10 <= stb_tilt <= 10:
+                L = round(550 + stb_tilt * 55)
+                R = round(1050 + stb_tilt * 55)
                 U = 700
                 D = 100
                 cv2.imshow("SampleWindow", SampleWindow[D:U, L:R])
-            elif y < -10:
+            elif stb_tilt < -10:
                 cv2.imshow("SampleWindow", SampleWindow[D:U, 0:500])
             else:
                 cv2.imshow("SampleWindow", SampleWindow[D:U, 1100:1600])
@@ -134,12 +151,12 @@ while cap.isOpened():
 
         cv2.putText(image, f'FPS: {int(fps)}', (20, 450), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 2)
 
-        # mp_drawing.draw_landmarks(
-        #     image=image,
-        #     landmark_list=face_landmarks,
-        #     connections=mp_face_mesh.FACE_CONNECTIONS,
-        #     landmark_drawing_spec=drawing_spec,
-        #     connection_drawing_spec=drawing_spec)
+        mp_drawing.draw_landmarks(
+            image=image,
+            landmark_list=face_landmarks,
+            connections=mp_face_mesh.FACEMESH_CONTOURS,
+            landmark_drawing_spec=drawing_spec,
+            connection_drawing_spec=drawing_spec)
 
     cv2.imshow('Head Pose Estimation', image)
 
