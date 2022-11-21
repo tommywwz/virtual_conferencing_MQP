@@ -102,6 +102,7 @@ class CamManagement:
         self.edge_y = {}  # average height of edge for each cam
         self.empty_frame = np.zeros(SHAPE, dtype=np.uint8)
         self.calib = True
+        self.calibCam = None
 
     def open_cam(self, camID=cam_id, if_user=False):
         cam_name = "Camera %s" % str(camID)
@@ -145,7 +146,7 @@ class CamManagement:
                 offset[camID] = 0
         return offset
 
-    def toggle_calib(self):
+    def toggle_calib(self, camID):
         self.calib = not self.calib
 
 
@@ -234,6 +235,8 @@ def camPreview(previewName, camID, segmentor, if_usercam):
 
 
 def ctlThread():
+    userCam = 1
+    clientCam = 0
     fit_shape, w_step, margins = 0, 0, 0
     W2 = CAM_W * 2
     halfW = int(W2 / 2)
@@ -245,14 +248,18 @@ def ctlThread():
     imgBG = cv2.imread("background/Bar.jpg")
     imgBG = cv2.resize(imgBG, BG_DIM)
 
-    CamMan.open_cam(camID=1, if_user=True)
-    CamMan.open_cam(camID=0)
+    CamMan.open_cam(camID=userCam, if_user=True)
+    CamMan.open_cam(camID=clientCam)
     # CamMan.open_cam()
 
     while True:
         frame_dict = CamMan.get_frame()
         if not frame_dict:
             continue  # if frame dictionary is empty, continue
+
+        if CamMan.calib:  # if calibration is toggled by user
+            cv2.imshow("calibration window", frame_dict[userCam])
+            frame_dict.pop(userCam, None)
 
         cam_count = len(frame_dict.keys())
         if cam_count != cam_loaded:  # update the stack parameter everytime a new cam joined
@@ -295,13 +302,14 @@ def ctlThread():
         # imgDisplay [0:848, 0:480, :] = f0[0:848, 0:480, :]
 
         cv2.imshow(name, imgBG_output)
+
         # cv2.imshow("Test", alpha_grey)
 
         key = cv2.waitKey(1)
         if key & 0xFF == ord('q'):
             break
         elif key & 0xFF == ord('t'):
-            CamMan.toggle_calib()
+            CamMan.toggle_calib(userCam)
 
     CamMan.set_Term(True)
     cv2.destroyWindow(name)
