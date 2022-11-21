@@ -101,13 +101,14 @@ class CamManagement:
         self.edge_lines = {}  # edge equation (a, b) for each cam
         self.edge_y = {}  # average height of edge for each cam
         self.empty_frame = np.zeros(SHAPE, dtype=np.uint8)
+        self.calib = True
 
-    def open_cam(self, camID=cam_id):
-        name = "Camera %s" % str(camID)
-        camThread = CamThread(previewName=name, camID=camID)
+    def open_cam(self, camID=cam_id, if_user=False):
+        cam_name = "Camera %s" % str(camID)
+        camThread = CamThread(cam_name, camID, if_user)
         camThread.start()
         time.sleep(0.5)
-        logging.info("%s: starting", name)
+        logging.info("%s: starting", cam_name)
         self.FRAMES[camID] = self.empty_frame
         self.edge_lines[camID] = [None, None]
         self.cam_id += 1  # camera conflicts need to be fixed here
@@ -144,20 +145,24 @@ class CamManagement:
                 offset[camID] = 0
         return offset
 
+    def toggle_calib(self):
+        self.calib = not self.calib
+
 
 class CamThread(threading.Thread):
-    def __init__(self, previewName, camID):
+    def __init__(self, previewName, camID, if_usercam):
         threading.Thread.__init__(self)
         self.previewName = previewName
         self.camID = camID
+        self.if_usercam = if_usercam
 
     def run(self):
         print("Starting Thread" + self.previewName)
         segmentor = SelfiSegmentation()  # setup BGremover
-        camPreview(self.previewName, self.camID, segmentor)
+        camPreview(self.previewName, self.camID, segmentor, self.if_usercam)
 
 
-def camPreview(previewName, camID, segmentor):
+def camPreview(previewName, camID, segmentor, if_usercam):
     # cam = vids[camID]
     # cv2.namedWindow("iso frame " + str(camID))
     # Real time video cap
@@ -210,13 +215,13 @@ def camPreview(previewName, camID, segmentor):
                         connection_drawing_spec=drawing_spec
                     )
 
-            edge = ed.process_frame(frame)
-            a, b = edge
+            if CamMan.calib and if_usercam:  # check if calibration is toggled in the user's cam thread
+                edge = ed.process_frame(frame, threshold=100)
+                a, b = edge
+                CamMan.save_edge(camID, [a, b])
+                if a is not None and b is not None:
+                    cv2.line(frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
 
-            if a is not None and b is not None:
-                cv2.line(frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
-
-            CamMan.save_edge(camID, [a, b])
             frame_bgrmv = segmentor.removeBG(frame, (255, 0, 0), threshold=0.5)
             CamMan.save_frame(camID=camID, frame=frame)
             logging.debug(str(CamMan.get_edge()))
@@ -240,7 +245,7 @@ def ctlThread():
     imgBG = cv2.imread("background/Bar.jpg")
     imgBG = cv2.resize(imgBG, BG_DIM)
 
-    CamMan.open_cam(camID=1)
+    CamMan.open_cam(camID=1, if_user=True)
     CamMan.open_cam(camID=0)
     # CamMan.open_cam()
 
@@ -250,7 +255,7 @@ def ctlThread():
             continue  # if frame dictionary is empty, continue
 
         cam_count = len(frame_dict.keys())
-        if cam_count != cam_loaded:
+        if cam_count != cam_loaded:  # update the stack parameter everytime a new cam joined
             cam_loaded = len(frame_dict.keys())
             fit_shape, w_step, margins = stackParam(frame_dict, imgBG.shape)
 
@@ -292,9 +297,11 @@ def ctlThread():
         cv2.imshow(name, imgBG_output)
         # cv2.imshow("Test", alpha_grey)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-
+        key = cv2.waitKey(1)
+        if key & 0xFF == ord('q'):
             break
+        elif key & 0xFF == ord('t'):
+            CamMan.toggle_calib()
 
     CamMan.set_Term(True)
     cv2.destroyWindow(name)

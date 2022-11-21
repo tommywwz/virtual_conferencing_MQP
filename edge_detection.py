@@ -130,7 +130,7 @@ if test:
         if success:
             cv2.imshow("original", raw_frame)
             raw_frame = cv2.rotate(raw_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            ed.process_frame(raw_frame, 90)
+            ed.process_frame(raw_frame, 100)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 cam.release()
