@@ -243,6 +243,7 @@ def ctlThread():
     cam_loaded = 0
 
     name = "Video"
+    calib_window = 'calibration window'
     cv2.namedWindow(name)
 
     imgBG = cv2.imread("background/Bar.jpg")
@@ -258,7 +259,7 @@ def ctlThread():
             continue  # if frame dictionary is empty, continue
 
         if CamMan.calib:  # if calibration is toggled by user
-            cv2.imshow("calibration window", frame_dict[userCam])
+            cv2.imshow(calib_window, frame_dict[userCam])
             frame_dict.pop(userCam, None)
 
         cam_count = len(frame_dict.keys())
@@ -310,6 +311,9 @@ def ctlThread():
             break
         elif key & 0xFF == ord('t'):
             CamMan.toggle_calib(userCam)
+            if not CamMan.calib:  # check if calib is toggled to false
+                cv2.destroyWindow(calib_window)
+
 
     CamMan.set_Term(True)
     cv2.destroyWindow(name)
