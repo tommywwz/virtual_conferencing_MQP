@@ -1,7 +1,6 @@
 import cv2
 import mediapipe as mp
 import numpy as np
-import time
 
 DEBUG = True
 
@@ -18,24 +17,23 @@ StaticImg = cv2.imread("vid/solvay2.jpg")
 
 
 class HeadTrack:
-    HIST = 15  # length of debouncing FIFO buffer
+    HIST = 20  # length of debouncing FIFO buffer
 
     def __init__(self):
-        self.counter = 0
         self.tilt_buffer = []
-        self.U = 700
-        self.D = 100
-        self.center_offset = 0
+        self.center_y_offset = 0
+        self.center_x_offset = 0
         self.calib = False
 
     def set_calib(self):
         self.calib = True
 
-    def center_head(self, offset):
-        self.center_offset = -offset
+    def center_head(self, x_offset, y_offset):
+        self.center_x_offset = -x_offset
+        self.center_y_offset = -y_offset
         self.calib = False
 
-    def HeadTacker(self, user_cam, outputFrame, fovRatio=1.78, sensitivity=5):
+    def HeadTacker(self, user_cam, outputFrame, fovRatio=1.78, sensitivity=5, h_bound=0.8):
         # Flip the image horizontally for a later selfie-view display
         # Also convert the color space from BGR to RGB
         user_cam = cv2.cvtColor(cv2.flip(user_cam, 1), cv2.COLOR_BGR2RGB)
@@ -54,12 +52,15 @@ class HeadTrack:
 
         img_h, img_w, img_c = user_cam.shape
         out_h, out_w, out_c = outputFrame.shape
-        fov = round(fovRatio*out_h)
-        halfFOV = round(fov / 2)
-        center = round(out_w / 2)
+        fov_h = round(out_h*h_bound)
+        fov_w = round(fovRatio*fov_h)  # field of view in width take 90% of the full canvas to left moving space
+        halfFOV_h = round(fov_h / 2)
+        halfFOV_w = round(fov_w / 2)
+        y_center = round(out_w / 2)
+        x_center = round(out_h / 2)
 
-        headbound_R = sensitivity
-        headbound_L = -sensitivity
+        headbound_R = headbound_U = sensitivity
+        headbound_L = headbound_D = -sensitivity
 
         face_3d = []
         face_2d = []
@@ -111,34 +112,59 @@ class HeadTrack:
                 z = angles[2] * 360
 
                 if self.calib:
-                    self.center_head(y)
+                    self.center_head(x, y)
 
-                y += self.center_offset
+                x += self.center_x_offset
+                y += self.center_y_offset
+                head_dir = []
+
+                if headbound_D <= x <= headbound_U:  # if head direction is in boundary
+                    head_dir.append(x)
+                elif x < headbound_D:  # if head direction is far down
+                    head_dir.append(headbound_D)
+                else:  # if head direction is far up
+                    head_dir.append(headbound_U)
 
                 if headbound_L <= y <= headbound_R:  # if head direction is in boundary
-                    self.tilt_buffer.append(y)
+                    head_dir.append(y)
                 elif y < headbound_L:  # if head direction is far left
-                    self.tilt_buffer.append(headbound_L)
+                    head_dir.append(headbound_L)
                 else:  # if head direction is far right
-                    self.tilt_buffer.append(headbound_R)
+                    head_dir.append(headbound_R)
 
-                del self.tilt_buffer[0]  # pop the first element of the buffer
-                if len(self.tilt_buffer) < self.HIST:
-                    self.tilt_buffer.append(y)
+                if len(self.tilt_buffer) >= self.HIST:
+                    del self.tilt_buffer[0]  # pop the first element of the buffer when buffer is longer than limit
+                self.tilt_buffer.append(head_dir)
 
                 loc_tilt_buffer = self.tilt_buffer
                 print(len(loc_tilt_buffer))
-                stb_tilt = np.mean(loc_tilt_buffer)
-                tilt_step = (center - halfFOV)/headbound_R  # calculate the ratio of head tilt to image rolling
-                if headbound_L <= stb_tilt <= headbound_R:
-                    L = round(center - halfFOV + stb_tilt * tilt_step)
-                    R = round(center + halfFOV + stb_tilt * tilt_step)
-                    outputFrame = outputFrame[:, L:R]
-                elif stb_tilt < -10:
-                    outputFrame = outputFrame[:, 0:fov]
-                else:
-                    outputFrame = outputFrame[:, out_w-fov:out_w]
+                stb_tilt = np.mean(loc_tilt_buffer, axis=0)
+                stb_x, stb_y = stb_tilt
 
+                tilt_y_step = (y_center - halfFOV_w) / headbound_R  # calculate the ratio of head tilt to image rolling
+                tilt_x_step = (x_center - halfFOV_h) / headbound_U  # calculate the ratio of head tilt to image rolling
+
+                if headbound_D <= stb_x <= headbound_U:  # when head is in boundary
+                    U = round(x_center - halfFOV_h - stb_x * tilt_x_step)
+                    D = round(x_center + halfFOV_h - stb_x * tilt_x_step)
+                elif stb_x < headbound_D:  # when head is too low
+                    U = out_h-fov_h
+                    D = out_h
+                else:  # when head is too high
+                    U = 0
+                    D = fov_h
+
+                if headbound_L <= stb_y <= headbound_R:  # when head is in boundary
+                    L = round(y_center - halfFOV_w + stb_y * tilt_y_step)
+                    R = round(y_center + halfFOV_w + stb_y * tilt_y_step)
+                elif stb_y < headbound_L:  # when head is too left
+                    L = 0
+                    R = fov_w
+                else:  # when head is too left
+                    L = out_w-fov_w
+                    R = out_w
+
+                outputFrame = outputFrame[U:D, L:R]
 
                 # Display the nose direction
                 nose_3d_projection, jacobian = cv2.projectPoints(nose_3d, rot_vec, trans_vec, cam_matrix, dist_matrix)
@@ -160,9 +186,11 @@ class HeadTrack:
                 landmark_drawing_spec=drawing_spec,
                 connection_drawing_spec=drawing_spec)
         else:  # in case if face is not find, display the centered image
-            left_ctr = center - halfFOV
-            right_ctr = center + halfFOV
-            outputFrame = outputFrame[:, left_ctr:right_ctr]
+            left_boundary = y_center - halfFOV_w
+            right_boundary = y_center + halfFOV_w
+            up_boundary = x_center - halfFOV_h
+            down_boundary = x_center + halfFOV_h
+            outputFrame = outputFrame[up_boundary:down_boundary, left_boundary:right_boundary]
 
         cv2.imshow("debug", user_cam)
 
@@ -183,6 +211,5 @@ if DEBUG:
             break
         elif key == ord('t'):
             ht.set_calib()
-
 
     cap.release()
