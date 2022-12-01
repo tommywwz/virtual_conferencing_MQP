@@ -17,7 +17,6 @@ StaticImg = cv2.imread("vid/solvay2.jpg")
 
 
 class HeadTrack:
-    HIST = 20  # length of debouncing FIFO buffer
 
     def __init__(self):
         self.tilt_buffer = []
@@ -33,10 +32,9 @@ class HeadTrack:
         self.center_y_offset = -y_offset
         self.calib = False
 
-    def HeadTacker(self, user_cam, outputFrame, fovRatio=1.78, sensitivity=5, h_bound=0.8):
-        # Flip the image horizontally for a later selfie-view display
-        # Also convert the color space from BGR to RGB
-        user_cam = cv2.cvtColor(cv2.flip(user_cam, 1), cv2.COLOR_BGR2RGB)
+    def HeadTacker(self, cam_feed, outputFrame, hist=20, fovRatio=1.78, sensitivity=6, h_bound=0.8):
+
+        user_cam = cv2.cvtColor(cv2.flip(cam_feed, 1), cv2.COLOR_BGR2RGB)
 
         # To improve performance
         user_cam.flags.writeable = False
@@ -132,7 +130,7 @@ class HeadTrack:
                 else:  # if head direction is far right
                     head_dir.append(headbound_R)
 
-                if len(self.tilt_buffer) >= self.HIST:
+                if len(self.tilt_buffer) >= hist:
                     del self.tilt_buffer[0]  # pop the first element of the buffer when buffer is longer than limit
                 self.tilt_buffer.append(head_dir)
 
@@ -203,6 +201,9 @@ if DEBUG:
         success, image = cap.read()
 
         if success:
+            # Flip the image horizontally for a later selfie-view display
+            # Also convert the color space from BGR to RGB
+
             img_processed = ht.HeadTacker(image, StaticImg, fovRatio=1, sensitivity=6)
             cv2.imshow("head", img_processed)
 

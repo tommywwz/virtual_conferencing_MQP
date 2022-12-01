@@ -4,10 +4,10 @@ import numpy as np
 import threading
 import cvzone
 from cvzone.SelfiSegmentationModule import SelfiSegmentation
-import mediapipe as mp
+
 import time
 import logging
-import os
+import HeadTrack
 
 import edge_detection
 
@@ -22,10 +22,10 @@ SHAPE = (CAM_W, CAM_H, 3)
 R = CAM_H / CAM_W  # aspect ratio using the ratio of height to width to improve the efficiency of stackIMG function
 BLUE = (255, 0, 0)
 
-vid1 = cv2.VideoCapture("vid/Single_User_View_1(WideAngle).MOV")
-vid2 = cv2.VideoCapture("vid/Single_User_View_2(WideAngle).MOV")
+vid1 = "vid/Single_User_View_1(WideAngle).MOV"
+vid2 = "vid/Single_User_View_2(WideAngle).MOV"
 vid3 = cv2.VideoCapture("vid/IMG_0582.MOV")
-vids = [vid1, vid2, vid3]
+vids = {101: vid1, 102: vid2}
 
 # mp_drawing = mp.solutions.drawing_utils
 # mp_face_mesh = mp.solutions.face_mesh
@@ -54,12 +54,19 @@ def stackParam(cam_dict, bg_shape: int):
     # return: fit_width, number of image to stack, spacing for each camera,
     bg_h, bg_w, bg_c = bg_shape
     num_of_cam = len(cam_dict)
-    w_step = int(np.floor(bg_w / num_of_cam))
-    fit_width = w_step
-    fit_height = np.floor(fit_width * R)
+    tallest = 0
+    for frame in cam_dict.values():
+        h, w, c = frame.shape
+        ratio = h/w
+        if ratio > tallest:
+            tallest = ratio
+
+    fit_width = w_step = int(np.floor(bg_w / num_of_cam))
+
+    fit_height = np.floor(fit_width * tallest)
 
     if fit_height > bg_h:
-        fit_width = np.floor(bg_h / R)
+        fit_width = np.floor(bg_h / tallest)
         fit_height = bg_h
 
     fit_shape = (int(fit_height), int(fit_width))
@@ -104,9 +111,9 @@ class CamManagement:
         self.calib = True
         self.calibCam = None
 
-    def open_cam(self, camID=cam_id, if_user=False):
+    def open_cam(self, camID=cam_id, if_user=False, if_demo=False):
         cam_name = "Camera %s" % str(camID)
-        camThread = CamThread(cam_name, camID, if_user)
+        camThread = CamThread(cam_name, camID, if_user, if_demo)
         camThread.start()
         time.sleep(0.5)
         logging.info("%s: starting", cam_name)
@@ -152,60 +159,46 @@ class CamManagement:
 
 
 class CamThread(threading.Thread):
-    def __init__(self, previewName, camID, if_usercam):
+    def __init__(self, previewName, camID, if_usercam, if_demo):
         threading.Thread.__init__(self)
         self.previewName = previewName
         self.camID = camID
         self.if_usercam = if_usercam
+        self.if_demo = if_demo
 
     def run(self):
         print("Starting Thread" + self.previewName)
         # segmentor = SelfiSegmentation()  # setup BGremover
-        camPreview(self.previewName, self.camID, self.if_usercam)
+        camPreview(self.previewName, self.camID, self.if_usercam, self.if_demo)
 
 
-segmentor = SelfiSegmentation()
-
-
-def camPreview(previewName, camID, if_usercam):
+def camPreview(previewName, camID, if_usercam, if_demo_video):
     # cam = vids[camID]
     # cv2.namedWindow("iso frame " + str(camID))
     # Real time video cap
-    cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
-    ed = edge_detection.EdgeDetection()
+    if if_demo_video:
+        cam = cv2.VideoCapture(vids[camID])
+    else:
+        cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
+        ed = edge_detection.EdgeDetection()
+        cam.set(3, 640)  # width
+        cam.set(4, 360)  # height
 
-    cam.set(3, 640)  # width
-    cam.set(4, 360)  # height
+    segmentor = SelfiSegmentation()
 
     while cam.isOpened():
         success, frame = cam.read()
-
-        frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        h, w, c = frame.shape
 
         if not success:
             # skip if no frame
             continue
 
-        # if camID != 2:
-        #     frame = cv2.resize(frame, (360, 640))
-        # else:
-        #     frame = cv2.resize(frame, (640, 360))
-        #     bg = cv2.resize(cv2.imread("background/Bar.jpg"), (640, 360))
-        #
-        #     frame_bgrmv = segmentor.removeBG(frame, bg, threshold=0.5)
-        #     CamMan.save_frame(camID=camID, frame=frame_bgrmv)
-        #     if CamMan.check_Term():
-        #         break
-        #     continue
+        if not if_demo_video:
+            frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        h, w, c = frame.shape
 
-        frame = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
-        frame.flags.writeable = False
-
-        frame.flags.writeable = True
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-        if CamMan.calib and if_usercam:  # check if calibration is toggled in the user's cam thread
+        if_calib = CamMan.calib
+        if if_calib and if_usercam:  # check if calibration is toggled in the user's cam thread
             edge = ed.process_frame(frame, threshold=100)
             a, b = edge
             CamMan.save_edge(camID, [a, b])
@@ -213,7 +206,7 @@ def camPreview(previewName, camID, if_usercam):
                 cv2.line(frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
 
         frame_bgrmv = segmentor.removeBG(frame, (255, 0, 0), threshold=0.5)
-        CamMan.save_frame(camID=camID, frame=frame_bgrmv)
+        CamMan.save_frame(camID=camID, frame=frame)
         logging.debug(str(CamMan.get_edge()))
 
         if CamMan.check_Term():
@@ -240,16 +233,19 @@ def ctlThread():
 
     CamMan.open_cam(camID=userCam, if_user=True)
     CamMan.open_cam(camID=clientCam)
-    # CamMan.open_cam()
+    CamMan.open_cam(camID=101, if_demo=True)
+    CamMan.open_cam(camID=102, if_demo=True)
 
     while True:
         frame_dict = CamMan.get_frame()
+
         if not frame_dict:
             continue  # if frame dictionary is empty, continue
-
+        user_feed = frame_dict[userCam]
         if CamMan.calib:  # if calibration is toggled by user
-            cv2.imshow(calib_window, frame_dict[userCam])
-            frame_dict.pop(userCam, None)
+            cv2.imshow(calib_window, user_feed)
+
+        frame_dict.pop(userCam, None)  # user camera won't be displayed
 
         cam_count = len(frame_dict.keys())  # get the number of camera connected
         if cam_count != cam_loaded:  # update the stack parameter everytime a new cam joined
@@ -285,10 +281,8 @@ def ctlThread():
                          lineType=cv2.LINE_AA)
         blurred_img = cv2.GaussianBlur(imgBG_output, (9, 9), 0)
         output = np.where(mask == np.array([0, 255, 0]), blurred_img, imgBG_output)
-        # BG = imgBG.copy()
-        # BG[0:640, 0:720, :] = cv2.cvtColor(imgStackedGBRA, cv2.COLOR_BGRA2BGR)
-        # imgDisplay = imgBG.copy()
-        # imgDisplay [0:848, 0:480, :] = f0[0:848, 0:480, :]
+
+        imgBG_output = ht.HeadTacker(user_feed, imgBG_output, hist=10)
 
         cv2.imshow(name, imgBG_output)
 
@@ -300,6 +294,7 @@ def ctlThread():
         elif key & 0xFF == ord('t'):
             CamMan.toggle_calib(userCam)
             if not CamMan.calib:  # check if calib is toggled to false
+                ht.set_calib()
                 cv2.destroyWindow(calib_window)
 
     CamMan.set_Term(True)
@@ -307,6 +302,7 @@ def ctlThread():
 
 
 CamMan = CamManagement()
+ht = HeadTrack.HeadTrack()
 logging.info("Starting Control Thread")
 thread0 = threading.Thread(target=ctlThread)
 thread0.start()
