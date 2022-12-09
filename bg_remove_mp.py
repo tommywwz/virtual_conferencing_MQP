@@ -37,14 +37,15 @@ class SegmentationBG:
         # Normalize the nparray to uint8 type
         return out
 
-    def mask_bg(self, frame):
+    def mask_bg(self, frame, threshold=0.4):
         # param frame needs to be portrait
         frame_RGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame_RGB.flags.writeable = False
         result = self.selfie_segmentation.process(frame_RGB)
         mask = result.segmentation_mask
         frame_RGB.flags.writeable = True
-        return mask
+        condition = np.stack((mask,) * 3, axis=-1) > threshold
+        return mask, condition
 
 
 if DEBUG:

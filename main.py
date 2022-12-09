@@ -2,9 +2,6 @@
 import cv2
 import numpy as np
 import threading
-import cvzone
-from cvzone.SelfiSegmentationModule import SelfiSegmentation
-
 import time
 import logging
 import HeadTrack
@@ -234,7 +231,6 @@ def camPreview(previewName, camID, if_usercam):
     cam.set(3, 640)  # width
     cam.set(4, 360)  # height
 
-    segmentor = SelfiSegmentation()
 
     while True:
         success, frame = cam.read()
@@ -253,7 +249,7 @@ def camPreview(previewName, camID, if_usercam):
                 h, w, c = frame.shape
                 cv2.line(frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
 
-        frame_bgrmv = segmentor.removeBG(frame, (255, 0, 0), threshold=0.5)
+
         CamMan.save_frame(camID=camID, frame=frame)
         logging.debug(str(CamMan.get_edge()))
 
