@@ -8,7 +8,7 @@ from cvzone.SelfiSegmentationModule import SelfiSegmentation
 import time
 import logging
 import HeadTrack
-
+import bg_remove_mp
 import edge_detection
 
 logging.basicConfig(level=logging.DEBUG)
@@ -22,8 +22,8 @@ SHAPE = (CAM_W, CAM_H, 3)
 R = CAM_H / CAM_W  # aspect ratio using the ratio of height to width to improve the efficiency of stackIMG function
 BLUE = (255, 0, 0)
 
-vid1 = "vid/Single_User_View_1(WideAngle).MOV"
-vid2 = "vid/Single_User_View_2(WideAngle).MOV"
+vid1 = "vid/demo2.mp4"
+vid2 = "vid/demo1.MOV"
 vid3 = cv2.VideoCapture("vid/IMG_0582.MOV")
 vids = {101: vid1, 102: vid2}
 
@@ -31,22 +31,22 @@ vids = {101: vid1, 102: vid2}
 # mp_face_mesh = mp.solutions.face_mesh
 
 
-def Yshift_img(img_vector, y_offset: int, fill_clr=(0, 0, 0)):
-    # y_offset: positive: upward shifting; negative: downward shifting
-
-    h, w, c = img_vector.shape
-
-    blank = np.full(shape=(np.abs(y_offset), w, c), fill_value=fill_clr)
-    if y_offset > 0:
-        stack_img = np.vstack((img_vector, blank))
-        h1, w1, c1 = stack_img.shape
-        h = h1 - h
-        img_out = stack_img[h:h1, 0:w, :]
-    else:
-        stack_img = np.vstack((blank, img_vector))
-        img_out = stack_img[0:h, 0:w, :]
-
-    return img_out
+# def Yshift_img(img_vector, y_offset: int, fill_clr=(0, 0, 0)):
+#     # y_offset: positive: upward shifting; negative: downward shifting
+#
+#     h, w, c = img_vector.shape
+#
+#     blank = np.full(shape=(np.abs(y_offset), w, c), fill_value=fill_clr)
+#     if y_offset > 0:
+#         stack_img = np.vstack((img_vector, blank))
+#         h1, w1, c1 = stack_img.shape
+#         h = h1 - h
+#         img_out = stack_img[h:h1, 0:w, :]
+#     else:
+#         stack_img = np.vstack((blank, img_vector))
+#         img_out = stack_img[0:h, 0:w, :]
+#
+#     return img_out
 
 
 def stackParam(cam_dict, bg_shape: int):
@@ -81,18 +81,30 @@ def stackParam(cam_dict, bg_shape: int):
 def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_shift_y):
     loc_bgIMG = bg_img.copy()
     fit_h, fit_w = fit_shape
+    bg_h, bg_w, bg_c = bg_img.shape
     h_margin, w_margin = margins[0], margins[1]
     i = 0
 
     for camID in cam_dict:
         frame = cam_dict[camID]
         rsz_cam = cv2.resize(frame, (fit_w, fit_h))
-        rsz_cam = Yshift_img(rsz_cam, cam_shift_y[camID], BLUE)
+        # rsz_cam = Yshift_img(rsz_cam, cam_shift_y[camID], BLUE)
+        shift_y = cam_shift_y[camID]  # extract the shift value on y-axis
+        print(str(camID)+": shift_y = "+str(shift_y))
+        top_spacing = h_margin + shift_y
         x_left = w_step * i + w_margin
         x_right = x_left + fit_w
+        # y_top = clamp(h_margin, 0, bg_h)
+        # y_bottom = clamp(h_margin + fit_h, 0, bg_h)
         y_top = h_margin
+        half = round(h_margin/2)
         y_bottom = h_margin + fit_h
-        loc_bgIMG[y_top:y_bottom, x_left:x_right, :] = rsz_cam
+        if top_spacing <= 0:
+            a = rsz_cam[0:fit_h+top_spacing, :, :]
+            loc_bgIMG[-top_spacing:fit_h, x_left:x_right, :] = a
+        else:
+            b = rsz_cam[top_spacing:fit_h, :, :]
+            loc_bgIMG[0:fit_h-top_spacing, x_left:x_right, :] = b
         i += 1
 
     return loc_bgIMG
@@ -149,7 +161,9 @@ class CamManagement:
             if camID in self.edge_y.keys():  # check if the cam id associated with an edge information
                 # convert the edge location to the offset in background's dimension
                 background_y = np.floor(self.edge_y[camID]*BG_H/CAM_H)
+                # convert offset to background coordinate
                 offset[camID] = int(background_y - self.reference_y)
+                # postive: table belows ref line, negative: table above ref line
             else:
                 offset[camID] = 0
         return offset
@@ -169,40 +183,74 @@ class CamThread(threading.Thread):
     def run(self):
         print("Starting Thread" + self.previewName)
         # segmentor = SelfiSegmentation()  # setup BGremover
-        camPreview(self.previewName, self.camID, self.if_usercam, self.if_demo)
+        if self.if_demo:
+            videoPreview(self.previewName, self.camID)
+        else:
+            camPreview(self.previewName, self.camID, self.if_usercam)
 
 
-def camPreview(previewName, camID, if_usercam, if_demo_video):
+def videoPreview(previewName, camID):
+    cam = cv2.VideoCapture(vids[camID])
+    ed = edge_detection.EdgeDetection()
+    frame_counter = 0
+    calib_length = 50
+    seg_bg = bg_remove_mp.SegmentationBG()
+    while True:
+        success, frame = cam.read()
+        if not success:
+            cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            # restart the video from the first frame if it is ended
+            continue
+        else:
+            resized_frame = cv2.resize(frame, (360, 640))
+            if frame_counter < calib_length:
+                frame_counter += 1
+                edge = ed.process_frame(resized_frame, threshold=100)
+                a, b = edge
+                CamMan.save_edge(camID, [a, b])
+                # CamMan.save_edge(camID, [a, b])
+                if a is not None and b is not None:
+                    h, w, c = resized_frame.shape
+                    cv2.line(resized_frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
+                    # cv2.imshow("test"+str(camID), resized_frame)
+
+            blurred_output = seg_bg.blur_bg(resized_frame)
+            CamMan.save_frame(camID=camID, frame=blurred_output)
+
+        cv2.waitKey(15)
+        if CamMan.check_Term():
+            break
+
+    print("Exiting " + previewName)
+    cam.release()
+
+
+def camPreview(previewName, camID, if_usercam):
     # cam = vids[camID]
     # cv2.namedWindow("iso frame " + str(camID))
     # Real time video cap
-    if if_demo_video:
-        cam = cv2.VideoCapture(vids[camID])
-    else:
-        cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
-        ed = edge_detection.EdgeDetection()
-        cam.set(3, 640)  # width
-        cam.set(4, 360)  # height
+    cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
+    ed = edge_detection.EdgeDetection()
+    cam.set(3, 640)  # width
+    cam.set(4, 360)  # height
 
     segmentor = SelfiSegmentation()
 
-    while cam.isOpened():
+    while True:
         success, frame = cam.read()
 
         if not success:
             # skip if no frame
             continue
 
-        if not if_demo_video:
-            frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        h, w, c = frame.shape
+        frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
-        if_calib = CamMan.calib
-        if if_calib and if_usercam:  # check if calibration is toggled in the user's cam thread
+        if CamMan.calib and if_usercam:  # check if calibration is toggled in the user's cam thread
             edge = ed.process_frame(frame, threshold=100)
             a, b = edge
             CamMan.save_edge(camID, [a, b])
             if a is not None and b is not None:
+                h, w, c = frame.shape
                 cv2.line(frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
 
         frame_bgrmv = segmentor.removeBG(frame, (255, 0, 0), threshold=0.5)
@@ -217,22 +265,20 @@ def camPreview(previewName, camID, if_usercam, if_demo_video):
 
 
 def ctlThread():
-    userCam = 1
+    userCam = 0
     clientCam = 0
     fit_shape, w_step, margins = 0, 0, 0
-    W2 = CAM_W * 2
-    halfW = int(W2 / 2)
     cam_loaded = 0
 
     name = "Video"
     calib_window = 'calibration window'
     cv2.namedWindow(name)
 
-    imgBG = cv2.imread("background/Bar.jpg")
+    imgBG = cv2.imread("background/graphicstock-blurred-bokeh-interior-background-image-in-whites_B-3xL3NnluW_thumb.jpg")
     imgBG = cv2.resize(imgBG, BG_DIM)
 
     CamMan.open_cam(camID=userCam, if_user=True)
-    CamMan.open_cam(camID=clientCam)
+    # CamMan.open_cam(camID=clientCam)
     CamMan.open_cam(camID=101, if_demo=True)
     CamMan.open_cam(camID=102, if_demo=True)
 
@@ -249,7 +295,7 @@ def ctlThread():
 
         cam_count = len(frame_dict.keys())  # get the number of camera connected
         if cam_count != cam_loaded:  # update the stack parameter everytime a new cam joined
-            cam_loaded = len(frame_dict.keys())
+            cam_loaded = cam_count
             fit_shape, w_step, margins = stackParam(frame_dict, imgBG.shape)
 
         cam_offset_y = CamMan.get_cam_offset()
@@ -260,30 +306,38 @@ def ctlThread():
                 cam_offset_y[cam] = 0
             imgStacked = stackIMG(frame_dict, imgBG, fit_shape, w_step, margins, cam_offset_y)
 
-        temp = np.subtract(imgStacked, BLUE)
-
-        # Transparent mask stores boolean value
-        mask = (temp == (0, 0, 0))
-        mask_singleCH = (mask[:, :, 0] & mask[:, :, 1] & mask[:, :, 2])
-
-        alpha = np.zeros(imgStacked.shape, dtype=np.uint8)
-        imgBG_output = imgBG.copy()
-        # imgBG_output[mask_bin, :] = imgBG[mask_bin, :]
-        imgBG_output[~mask_singleCH, :] = imgStacked[~mask_singleCH, :]
-
-        alpha[mask_singleCH] = 0
-        alpha[~mask_singleCH] = 255
-        alpha_grey = cv2.cvtColor(alpha, cv2.COLOR_BGR2GRAY)
-
-        contours, hierarchy = cv2.findContours(alpha_grey.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        image_copy = imgBG_output.copy()
-        cv2.drawContours(image=image_copy, contours=contours, contourIdx=-1, color=(0, 255, 0), thickness=1,
-                         lineType=cv2.LINE_AA)
-        blurred_img = cv2.GaussianBlur(imgBG_output, (9, 9), 0)
-        output = np.where(mask == np.array([0, 255, 0]), blurred_img, imgBG_output)
-
-        imgBG_output = ht.HeadTacker(user_feed, imgBG_output, hist=10)
-
+        # temp = np.subtract(imgStacked, BLUE)
+        #
+        # # Transparent mask stores boolean value
+        # mask = (temp == (0, 0, 0))
+        # mask_singleCH = (mask[:, :, 0] & mask[:, :, 1] & mask[:, :, 2])
+        #
+        # alpha = np.zeros(imgStacked.shape, dtype=np.uint8)
+        # imgBG_output = imgBG.copy()temp = np.subtract(imgStacked, BLUE)
+        #
+        # # Transparent mask stores boolean value
+        # mask = (temp == (0, 0, 0))
+        # mask_singleCH = (mask[:, :, 0] & mask[:, :, 1] & mask[:, :, 2])
+        #
+        # alpha = np.zeros(imgStacked.shape, dtype=np.uint8)
+        # imgBG_output = imgBG.copy()
+        # # imgBG_output[mask_bin, :] = imgBG[mask_bin, :]
+        # imgBG_output[~mask_singleCH, :] = imgStacked[~mask_singleCH, :]
+        #
+        # alpha[mask_singleCH] = 0
+        # alpha[~mask_singleCH] = 255
+        # alpha_grey = cv2.cvtColor(alpha, cv2.COLOR_BGR2GRAY)
+        #
+        # contours, hierarchy = cv2.findContours(alpha_grey.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # image_copy = imgBG_output.copy()
+        # cv2.drawContours(image=image_copy, contours=contours, contourIdx=-1, color=(0, 255, 0), thickness=1,
+        #                  lineType=cv2.LINE_AA)
+        # blurred_img = cv2.GaussianBlur(imgBG_output, (9, 9), 0)
+        # output = np.where(mask == np.array([0, 255, 0]), blurred_img, imgBG_output)
+        # output = np.where(imgStacked == np.array([255, 0, 0]), imgBG, imgStacked)
+        ref_y = round(BG_H*6/7)
+        cv2.line(imgStacked, (0, ref_y), (BG_W, ref_y), (255, 255, 0))
+        imgBG_output = ht.HeadTacker(user_feed, imgStacked, hist=10)
         cv2.imshow(name, imgBG_output)
 
         # cv2.imshow("Test", alpha_grey)
