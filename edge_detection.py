@@ -46,6 +46,8 @@ class EdgeDetection:
         if debug: cv2.imshow("raw", portrait_frame)
         h, w, c = portrait_frame.shape
         cropped_image = portrait_frame[int(np.floor(2 * h / 3)):h, :, :]
+        cropped_image = cv2.medianBlur(cropped_image, 7)
+        if debug: cv2.imshow("After median blur", cropped_image)
         # cropped_image = cv2.GaussianBlur(cropped_image, (11, 11), 0)
         # cropped_image = cv2.medianBlur(cropped_image, 15)
         # if debug: cv2.imshow("After first blur", cropped_image)
@@ -55,10 +57,8 @@ class EdgeDetection:
         if debug: cv2.imshow("Sharpening", emboss)
 
         grey = cv2.cvtColor(emboss, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(grey, (25, 1), 0)
+        blurred = cv2.GaussianBlur(grey, (25, 3), 0)
         if debug: cv2.imshow("After Gaussian blur", blurred)
-        blurred = cv2.medianBlur(blurred, 9)
-        if debug: cv2.imshow("After median blur", blurred)
 
         edged = cv2.Canny(blurred, threshold1=10, threshold2=50)
         lines = cv2.HoughLinesP(edged, 1, np.pi / 180,
