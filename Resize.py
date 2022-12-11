@@ -102,9 +102,10 @@ with mp_facedetector.FaceDetection(min_detection_confidence=0.7) as face_detecti
 
                 print(bondWarn)  # boundary warning: [Left, Right, Up, Down], {0} if no warning
 
-                print(w, h)
+                #print(w, h)
+
                 if boundBox[3] < 100:
-                    image = image[24:456, 0:576]
+                    image = image[24:456, 32:608]
                     image = cv2.resize(image, (w, h))
 
                 # cv2.putText(image, f'{int(detection.score[0] * 100)}%', (boundBox[0], boundBox[1] - 20),
