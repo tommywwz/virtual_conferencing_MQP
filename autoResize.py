@@ -54,12 +54,12 @@ def bound_n_resize(frame, reference):
                 print(bound_warn)  # boundary warning: [Left, Right, Up, Down], {0} if no warning
 
                 if (boundBox[3] - reference) > 0.15*reference:
-                    w = 0.9*w
-                    h = 0.9*h
+                    w = round(0.9*w)
+                    h = round(0.9*h)
                     frame = cv2.resize(frame, (w, h))
                 if (reference - boundBox[3]) > 0.15*reference:
-                    w = 1.1 * w
-                    h = 1.1 * h
+                    w = round(1.1 * w)
+                    h = round(1.1 * h)
                     frame = cv2.resize(frame, (w, h))
 
     return frame
