@@ -1,7 +1,7 @@
 import mediapipe as mp
 import cv2
 import numpy as np
-DEBUG = False
+
 #
 # background_mp = mp.solutions.selfie_segmentation
 # mp_selfie_segmentation = background_mp.SelfieSegmentation
@@ -16,12 +16,14 @@ DEBUG = False
 
 
 class SegmentationBG:
+    Threshold = 0.5
+
     def __init__(self):
         self.background_mp = mp.solutions.selfie_segmentation
         self.mp_selfie_segmentation = self.background_mp.SelfieSegmentation
         self.selfie_segmentation = self.mp_selfie_segmentation(model_selection=0)
 
-    def blur_bg(self, frame, threshold=0.4, blur_intensity_x=51, blur_intensity_y=51):
+    def blur_bg(self, frame, threshold=Threshold, blur_intensity_x=51, blur_intensity_y=51):
         # param frame needs to be portrait
         frame_RGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame_RGB.flags.writeable = False
@@ -37,7 +39,7 @@ class SegmentationBG:
         # Normalize the nparray to uint8 type
         return out
 
-    def replace_bg(self, frame, background, threshold=0.4):
+    def replace_bg(self, frame, background, threshold=Threshold):
         # param frame needs to be portrait
         frame_RGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame_RGB.flags.writeable = False
@@ -52,22 +54,24 @@ class SegmentationBG:
         # Normalize the nparray to uint8 type
         return out
 
-    def mask_bg(self, frame, threshold=0.4):
+    def mask_bg(self, frame, threshold=Threshold):
         # param frame needs to be portrait
         frame_RGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame_RGB.flags.writeable = False
         result = self.selfie_segmentation.process(frame_RGB)
         mask = result.segmentation_mask
+        grescale_mask = cv2.normalize(mask, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8UC1)
         frame_RGB.flags.writeable = True
         condition = np.stack((mask,) * 3, axis=-1) > threshold
-        return mask, condition
+        return grescale_mask, condition
 
 
 def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_edge_y, edge_lines):
     loc_bgIMG = bg_img.copy()
     fit_h, fit_w = fit_shape
     bg_h, bg_w, bg_c = bg_img.shape
-    reference_y = np.floor(bg_h * 6 / 7)  # reference table line in background
+    reference_y = int(np.floor(bg_h * 6 / 7))  # reference table line in background
+    loc_bgIMG[reference_y:bg_h, 0:bg_w] = [55, 55, 55]
     h_margin, w_margin = margins[0], margins[1]
     i = 0
 
@@ -85,61 +89,85 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_edge_y, edge_line
 
         rsz_cam = cv2.resize(frame, (fit_w, fit_h))
 
-        loc_edge_b = edge_b.copy() * ratio
+        loc_edge_b = edge_b * ratio  # translate the edge height to current pixel coordinate
 
         edge_left = (0, round(loc_edge_b))
-        edge_right = (fit_w-1, round(edge_a*fit_w+loc_edge_b))
+        edge_right = (fit_w - 1, round(edge_a * fit_w + loc_edge_b))
         if (loc_edge_b < fit_h) == (loc_edge_b < fit_h):
             # if both sides of the two edge lines are not crossing the boundary
-            lower_left = (0, fit_h-1)
-            lower_right = (fit_w, fit_h-1)
+            lower_left = (0, fit_h - 1)
+            lower_right = (fit_w, fit_h - 1)
             contour = np.array([lower_left, lower_right, edge_right, edge_left])
         elif loc_edge_b > fit_h:
-            x_intercept = round(fit_h-loc_edge_b)/edge_a
-            lower_left = (x_intercept, fit_h-1)
+            x_intercept = round(fit_h - loc_edge_b) / edge_a
+            lower_left = (x_intercept, fit_h - 1)
             contour = np.array([lower_left, edge_left, edge_right])
         else:
-            x_intercept = round(fit_h - loc_edge_b)/edge_a
-            lower_right = (x_intercept, fit_h-1)
+            x_intercept = round(fit_h - loc_edge_b) / edge_a
+            lower_right = (x_intercept, fit_h - 1)
             contour = np.array([lower_right, edge_left, edge_right])
 
         lower_mask = np.zeros((fit_h, fit_w), np.uint8)
         cv2.drawContours(lower_mask, [contour], 0, 255, -1)
 
-        print(str(camID)+": shift_y = "+str(shift_y))
+        print(str(camID) + ": shift_y = " + str(shift_y))
         top_spacing = h_margin + shift_y
         x_left = w_step * i + w_margin
         x_right = x_left + fit_w
 
+        # image stacking and vertical alignment
         if top_spacing <= 0:
-            cropped_cam = rsz_cam[0:fit_h+top_spacing, :, :]
+            cropped_cam = rsz_cam[0:fit_h + top_spacing, :, :]
             cropped_bg = loc_bgIMG[-top_spacing:fit_h, x_left:x_right, :]
-
-            cropped_lower_mask = lower_mask[0:fit_h+top_spacing, :]
+            cropped_lower_mask = lower_mask[0:fit_h + top_spacing, :]
             cropped_upper_mask = cv2.bitwise_not(cropped_lower_mask)
 
-            blurredBG_cam = segbg.blur_bg(cropped_cam)
+            u_l = (x_left, -top_spacing)
+            b_l = (x_left, fit_h)
+            u_r = (x_right, -top_spacing)
+            b_r = (x_right, fit_h)
+            bg_mask = np.zeros((bg_h, bg_w, bg_c), np.uint8)
+            cam_cnt = np.array([u_l, b_l, b_r, u_r])
+            cam_cnt = scale_contour(cam_cnt, 0.8)  # scale down the contour to make the gradian change more natural
+            cv2.drawContours(bg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour with white color
+            bg_mask = cv2.GaussianBlur(bg_mask, (81, 81), 0)  # blur the edge of the foreground contour
+            cv2.imshow("mask" + str(camID), bg_mask)
+            bg_mask = cv2.normalize(bg_mask, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
+            # normalize the mask to the range of 0 to 1
+
+            # mask, condition = segbg.mask_bg(cropped_cam)
             replacedBG_cam = segbg.replace_bg(cropped_cam, cropped_bg)
 
-            lower_cam = cv2.bitwise_and(blurredBG_cam, blurredBG_cam, mask=cropped_lower_mask)
-            upper_cam = cv2.bitwise_and(replacedBG_cam, replacedBG_cam, mask=cropped_upper_mask)
+            # mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
 
+            lower_cam = cv2.bitwise_and(cropped_cam, cropped_cam, mask=cropped_lower_mask)
+            upper_cam = cv2.bitwise_and(replacedBG_cam, replacedBG_cam, mask=cropped_upper_mask)
+            # color = unique_count_app(lower_cam)
             merged_cam = cv2.add(lower_cam, upper_cam)
 
-            loc_bgIMG[-top_spacing:fit_h, x_left:x_right, :] = merged_cam
+            foreground = loc_bgIMG.copy()  # get a copy of current background for blurring
+            background = loc_bgIMG.copy()
+            foreground[-top_spacing:fit_h, x_left:x_right, :] = merged_cam
+
+            loc_bgIMG = background*(1-bg_mask) + foreground * bg_mask
+            loc_bgIMG = cv2.normalize(loc_bgIMG, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+            cv2.imshow("out" + str(camID), loc_bgIMG)
+
+
+            # loc_bgIMG[-top_spacing:fit_h, x_left:x_right, :] = merged_cam
+
         else:
             cropped_cam = rsz_cam[top_spacing:fit_h, :, :]
-            cropped_bg = loc_bgIMG[0:fit_h-top_spacing, x_left:x_right, :]
+            cropped_bg = loc_bgIMG[0:fit_h - top_spacing, x_left:x_right, :]
 
             cropped_lower_mask = lower_mask[top_spacing:fit_h, :]
             cropped_upper_mask = cv2.bitwise_not(cropped_lower_mask)
 
-            blurredBG_cam = segbg.blur_bg(cropped_cam)
             replacedBG_cam = segbg.replace_bg(cropped_cam, cropped_bg)
 
-            lower_cam = cv2.bitwise_and(blurredBG_cam, blurredBG_cam, mask=cropped_lower_mask)
+            lower_cam = cv2.bitwise_and(cropped_cam, cropped_cam, mask=cropped_lower_mask)
             upper_cam = cv2.bitwise_and(replacedBG_cam, replacedBG_cam, mask=cropped_upper_mask)
-
+            color = unique_count_app(lower_cam)
             merged_cam = cv2.add(lower_cam, upper_cam)
 
             loc_bgIMG[0:fit_h - top_spacing, x_left:x_right, :] = merged_cam
@@ -148,7 +176,36 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_edge_y, edge_line
     return loc_bgIMG
 
 
+def scale_contour(cnt, scale):
+    # reference:
+    # https://medium.com/analytics-vidhya/tutorial-how-to-scale-and-rotate-contours-in-opencv-using-python-f48be59c35a2
+    M = cv2.moments(cnt)
+    cx = int(M['m10']/M['m00'])
+    cy = int(M['m01']/M['m00'])
+
+    cnt_norm = cnt - [cx, cy]
+    cnt_scaled = cnt_norm * scale
+    cnt_scaled = cnt_scaled + [cx, cy]
+    cnt_scaled = cnt_scaled.astype(np.int32)
+
+    return cnt_scaled
+
+def unique_count_app(frame_w_blackmask):
+    raw_frame_unfold = frame_w_blackmask.reshape(-1, frame_w_blackmask.shape[-1])
+    non_black_mask = raw_frame_unfold != (0, 0, 0)
+    non_black_mask = non_black_mask[:, 0] | non_black_mask[:, 1] | non_black_mask[:, 2]
+    filtered_array = raw_frame_unfold[non_black_mask]
+    if len(filtered_array) != 0:
+        colors, count = np.unique(filtered_array, axis=0, return_counts=True)
+        return colors[count.argmax()]
+    else:
+        black = (0, 0, 0)
+        return black
+
+
 segbg = SegmentationBG()
+
+DEBUG = False
 
 if DEBUG:
     cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
@@ -158,6 +215,10 @@ if DEBUG:
         success, raw_frame = cam.read()
         if success:
             raw_frame = cv2.resize(raw_frame, (640, 360))
+            cv2.imshow("raw", raw_frame)
+            main_color = unique_count_app(raw_frame)
+            color_sample = np.full((100, 100, 3), main_color, dtype=np.uint8)
+            cv2.imshow("color", color_sample)
             raw_frame = cv2.rotate(raw_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
             output = segbg.blur_bg(raw_frame)
             cv2.imshow("test", output)
