@@ -1,7 +1,6 @@
 import mediapipe as mp
 import cv2
 import numpy as np
-
 #
 # background_mp = mp.solutions.selfie_segmentation
 # mp_selfie_segmentation = background_mp.SelfieSegmentation
@@ -66,7 +65,7 @@ class SegmentationBG:
         return grescale_mask, condition
 
 
-def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_edge_y, edge_lines):
+def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
     loc_bgIMG = bg_img.copy()
     fit_h, fit_w = fit_shape
     bg_h, bg_w, bg_c = bg_img.shape
@@ -76,14 +75,14 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_edge_y, edge_line
     i = 0
 
     for camID in cam_dict:
-        frame = cam_dict[camID]  # extract the frame of current camera
+        frameClass = cam_dict[camID]  # extract the frame of current camera
+        frame = frameClass.img
         frame_h, frame_w, frame_c = frame.shape
-        edge_y = cam_edge_y[camID]  # extract the edge location on y-axis
+        edge_y = frameClass.edge_y  # extract the edge location on y-axis
+        edge_a, edge_b = frameClass.edge_line  # extract the line equation parameters a, b
 
         background_y = np.floor(edge_y * fit_h / frame_h)  # transfer the edge location to background coordinate
         shift_y = int(background_y - reference_y)  # get the distance reference to the background edge line
-
-        edge_a, edge_b = edge_lines[camID]  # extract the line equation parameters a, b
 
         ratio = fit_h / frame_h  # calculate the ratio of fit shape respect to original shape
 

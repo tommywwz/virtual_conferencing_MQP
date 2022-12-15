@@ -7,16 +7,21 @@ import logging
 import HeadTrack
 import bg_remove_mp as bgmp
 import edge_detection
+import Frame
 
 logging.basicConfig(level=logging.DEBUG)
 
 VID_W = 360
 VID_H = 640
+VID_SHAPE = (VID_H, VID_W, 3)
+
 RAW_CAM_W = VID_H  # original camera setting is in landscape (will be rotated to portrait view in cam thread)
 RAW_CAM_H = VID_W  # so the camera's height & width is demo video's width & height
+RAW_CAM_SHAPE = (RAW_CAM_H, RAW_CAM_W, 3)
 
 BG_W = 640
 BG_H = 360
+BG_SHAPE = (BG_H, BG_W, 3)
 BG_DIM = (BG_W, BG_H)  # (w, h)
 
 SHAPE = (RAW_CAM_H, RAW_CAM_W, 3)
@@ -42,8 +47,8 @@ def stackParam(cam_dict, bg_shape: int):
     bg_h, bg_w, bg_c = bg_shape
     num_of_cam = len(cam_dict)
     tallest = 0
-    for frame in cam_dict.values():
-        h, w, c = frame.shape
+    for frameClass in cam_dict.values():
+        h, w, c = frameClass.img.shape
         ratio = h / w
         if ratio > tallest:
             tallest = ratio
@@ -92,7 +97,7 @@ class CamManagement:
     def save_frame(self, camID, frame):
         self.FRAMES[camID] = frame
 
-    def get_frame(self):
+    def get_frames(self):
         return self.FRAMES.copy()
 
     def set_Term(self, ifTerm: bool):
@@ -101,17 +106,17 @@ class CamManagement:
     def check_Term(self):
         return self.TERM
 
-    def save_edge(self, camID, edge):
-        a, b = edge
-        if a is not None and b is not None:
-            self.edge_lines[camID] = edge
-            self.edge_y[camID] = int(np.floor(RAW_CAM_W * a / 2 + b))  # height of edge's midpoint
-
-    def get_edge(self):
-        return self.edge_lines
-
-    def get_edge_y(self):
-        return self.edge_y
+    # def save_edge(self, camID, edge):
+    #     a, b = edge
+    #     if a is not None and b is not None:
+    #         self.edge_lines[camID] = edge
+    #         self.edge_y[camID] = int(np.floor(RAW_CAM_W * a / 2 + b))  # height of edge's midpoint
+    #
+    # def get_edge(self):
+    #     return self.edge_lines
+    #
+    # def get_edge_y(self):
+    #     return self.edge_y
 
     def toggle_calib(self, camID):
         self.calib = not self.calib
@@ -138,7 +143,8 @@ def videoPreview(previewName, camID):
     ed = edge_detection.EdgeDetection()
     frame_counter = 0
     calib_length = 50
-    seg_bg = bgmp.SegmentationBG()
+    frameClass = Frame.Frame(camID)
+
     while True:
         success, frame = cam.read()
         if not success:
@@ -152,16 +158,19 @@ def videoPreview(previewName, camID):
                 edge = ed.process_frame(resized_frame, threshold=100)
                 a, b = edge
 
-                # CamMan.save_edge(camID, [a, b])
                 if a is not None and b is not None:
                     h, w, c = resized_frame.shape
                     cv2.line(resized_frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
-                    CamMan.save_edge(camID, [a, b])
+                    # CamMan.save_edge(camID, [a, b])
                     # cv2.imshow("test"+str(camID), resized_frame)
                 else:
-                    CamMan.save_edge(camID, [0, 0])
-            # blurred_output = seg_bg.blur_bg(resized_frame)
-            CamMan.save_frame(camID=camID, frame=resized_frame)
+                    edge = (0, 0)
+                    # CamMan.save_edge(camID, [0, 0])
+                frameClass.updateFrame(image=resized_frame, edge_line=edge)  # update edge information
+            else:
+                frameClass.updateFrame(image=resized_frame)  # update image only
+
+            CamMan.save_frame(camID=camID, frame=frameClass)
 
         cv2.waitKey(15)
         if CamMan.check_Term():
@@ -179,6 +188,7 @@ def camPreview(previewName, camID, if_usercam):
     ed = edge_detection.EdgeDetection()
     cam.set(3, RAW_CAM_W)  # width
     cam.set(4, RAW_CAM_H)  # height
+    frameClass = Frame.Frame(camID)
 
     while True:
         success, frame = cam.read()
@@ -192,7 +202,6 @@ def camPreview(previewName, camID, if_usercam):
         if CamMan.calib and if_usercam:  # check if calibration is toggled in the user's cam thread
             edge = ed.process_frame(frame, threshold=100)
             a, b = edge
-            CamMan.save_edge(camID, [a, b])
             cv2.putText(frame,
                         text='Press T when satisfied with table edge',
                         org=(10, 30),
@@ -249,9 +258,16 @@ def camPreview(previewName, camID, if_usercam):
                                 lineType=cv2.LINE_AA,
                                 bottomLeftOrigin=False)
                     cv2.line(frame, (0, round(left_intercept)), (w, round(right_intercept)), (0, 255, 0), 2)
+            else:
+                edge = (0, 0)
 
-        CamMan.save_frame(camID=camID, frame=frame)
-        logging.debug(str(CamMan.get_edge()))
+            frameClass.updateFrame(image=frame, edge_line=edge)
+            # if in calibration, update frame and edge information
+        else:
+            frameClass.updateFrame(image=frame)  # if not in calibration, update frame only
+
+        CamMan.save_frame(camID=camID, frame=frameClass)
+        logging.debug(str(frameClass.edge_line))
 
         if CamMan.check_Term():
             break
@@ -282,11 +298,11 @@ def ctlThread():
     # CamMan.open_cam(camID=105, if_demo=True)
 
     while True:
-        frame_dict = CamMan.get_frame()
+        frame_dict = CamMan.get_frames()
 
         if not frame_dict:
             continue  # if frame dictionary is empty, continue
-        user_feed = frame_dict[userCam]
+        user_feed = frame_dict[userCam].img
         if CamMan.calib:  # if calibration is toggled by user
             cv2.imshow(calib_window, user_feed)
 
@@ -297,14 +313,11 @@ def ctlThread():
             cam_loaded = cam_count
             fit_shape, w_step, margins = stackParam(frame_dict, imgBG.shape)
 
-        cam_edge_y = CamMan.get_edge_y()
-        edge_lines = CamMan.get_edge()
-        if edge_lines:
-            imgStacked = bgmp.stackIMG(frame_dict, imgBG, fit_shape, w_step, margins, cam_edge_y, edge_lines)
-        else:
-            for cam in frame_dict:
-                edge_lines[cam] = (0, 0)
-            imgStacked = bgmp.stackIMG(frame_dict, imgBG, fit_shape, w_step, margins, cam_edge_y, edge_lines)
+        # cam_edge_y = CamMan.get_edge_y()
+        # edge_lines = CamMan.get_edge()
+
+        imgStacked = bgmp.stackIMG(frame_dict, imgBG, fit_shape, w_step, margins)
+
 
         # temp = np.subtract(imgStacked, BLUE)
         #
