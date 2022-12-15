@@ -72,7 +72,7 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
     fit_h, fit_w = fit_shape
     bg_h, bg_w, bg_c = bg_img.shape
     reference_y = int(np.floor(bg_h * 0.77))  # reference table line in background
-    table_color = (24, 32, 49)
+    table_color = (64, 64, 64)
     loc_bgIMG[reference_y:bg_h, 0:bg_w] = table_color
     h_margin, w_margin = margins[0], margins[1]
     i = 0

@@ -38,10 +38,6 @@ vid5 = "vid/demo5.mp4"
 vids = {101: vid1, 102: vid2, 103: vid3, 104: vid4, 105: vid5}
 
 
-# mp_drawing = mp.solutions.drawing_utils
-# mp_face_mesh = mp.solutions.face_mesh
-
-
 def stackParam(cam_dict, bg_shape: int):
     # should be called everytime a new cam joined
     # return: fit_width, number of image to stack, spacing for each camera,
@@ -247,7 +243,7 @@ def camPreview(previewName, camID, if_usercam):
             # skip if no frame
             continue
 
-        frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        frame = cv2.rotate(cv2.flip(frame, 1), cv2.ROTATE_90_CLOCKWISE)
 
         if CamMan.calib and if_usercam:  # check if calibration is toggled in the user's cam thread
             edge = ed.process_frame(frame, threshold=100)
@@ -266,16 +262,17 @@ def camPreview(previewName, camID, if_usercam):
                 h, w, c = frame.shape
                 left_intercept = b
                 right_intercept = w*a+b
-                if left_intercept > h:
+                print("here!!!"+ str(a))
+                if left_intercept > h or a > 0.15:
                     # check if the edge is intercept with the bottom line of screen
                     cv2.putText(frame,
-                                text='Try to rotate your camera to the right',
+                                text='Try to rotate your camera to the left',
                                 org=(10, VID_H - 30), fontFace=font, fontScale=.4, color=(0, 255, 255),
                                 thickness=1, lineType=linetype, bottomLeftOrigin=False)
                     cv2.line(frame, (0, round(left_intercept)), (w, round(right_intercept)), (0, 255, 255), 2)
-                elif right_intercept > h:
+                elif right_intercept > h or a < -0.15:
                     cv2.putText(frame,
-                                text='Try to rotate your camera to the left',
+                                text='Try to rotate your camera to the right',
                                 org=(10, VID_H - 30), fontFace=font, fontScale=.4, color=(0, 255, 255),
                                 thickness=1, lineType=linetype, bottomLeftOrigin=False)
                     cv2.line(frame, (0, round(left_intercept)), (w, round(right_intercept)), (0, 255, 255), 2)
@@ -376,7 +373,7 @@ def ctlThread():
 
         # ref_y = round(BG_H*6/7)
         # cv2.line(imgStacked, (0, ref_y), (BG_W, ref_y), (255, 255, 0))
-        imgBG_output = ht.HeadTacker(user_feed, imgStacked, hist=10)
+        imgBG_output = ht.HeadTacker(cv2.flip(user_feed, 1), imgStacked, hist=10)
         a_rsz.check_bound(user_feed, imgBG_output)
         cv2.imshow(name, imgBG_output)
 

@@ -55,7 +55,7 @@ class AutoResize:
         with self.mp_facedetector.FaceDetection(min_detection_confidence=detection_confid) as face_detection:
             bh, bw = frame_bg.shape[:2]
             # Convert the BGR image to RGB
-            frame_user = cv2.cvtColor(cv2.flip(frame_user, 1), cv2.COLOR_BGR2RGB)
+            frame_user = cv2.cvtColor(frame_user, cv2.COLOR_BGR2RGB)
             # Process the image and find faces
             results = face_detection.process(frame_user)
             # Convert the image color back so it can be displayed
