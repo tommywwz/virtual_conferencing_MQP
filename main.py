@@ -155,20 +155,35 @@ def videoPreview(previewName, camID):
             # restart the video from the first frame if it is ended
             continue
 
-        resized_frame = cv2.resize(frame, (VID_W, VID_H))
+        image = cv2.resize(frame, (VID_W, VID_H))
         if frame_counter < calib_length:
-            ratio = autoResize.resize(resized_frame, 100)
+            ratio = autoResize.resize(image, 100)
+
+            adjust_w = round(VID_W * ratio)
+            adjust_h = round(VID_H * ratio)
+            new_shape = (adjust_w, adjust_h)
+            if ratio > 1:
+                rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_LINEAR)
+                ah, aw = rsz_image.shape[:2]
+                dn = round(ah * 0.5 + VID_H * 0.5)
+                up = round(ah * 0.5 - VID_H * 0.5)
+                lt = round(aw * 0.5 - VID_W * 0.5)
+                rt = round(aw * 0.5 + VID_W * 0.5)
+                rsz_image = rsz_image[up:dn, lt:rt]
+            else:
+                rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
+
             print("cam" + str(camID) + " ratio: " + str(ratio))
             frame_counter += 1
-            edge = ed.process_frame(resized_frame, threshold=100)
+            edge = ed.process_frame(rsz_image, threshold=100)
             a, b = edge
             if a is not None and b is not None:
-                h, w, c = resized_frame.shape
-                cv2.line(resized_frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
+                h, w, c = rsz_image.shape
+                cv2.line(rsz_image, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
                 # cv2.imshow("test"+str(camID), resized_frame)
             else:
                 edge = (0, 0)
-            frameClass.updateFrame(image=resized_frame, edge_line=edge, ref_ratio=ratio)  # update edge information
+            frameClass.updateFrame(image=rsz_image, edge_line=edge, ref_ratio=ratio)  # update edge information
         else:
             break
 
@@ -176,6 +191,12 @@ def videoPreview(previewName, camID):
         cv2.waitKey(15)
         if CamMan.check_Term():
             break
+
+    # extract the calibrated parameters for cropping image
+    ratio = frameClass.ref_ratio
+    adjust_w = round(VID_W * ratio)
+    adjust_h = round(VID_H * ratio)
+    new_shape = (adjust_w, adjust_h)
 
     while True:  # demo video running phase
         success, frame = cam.read()
@@ -185,8 +206,20 @@ def videoPreview(previewName, camID):
             # restart the video from the first frame if it is ended
             continue
 
-        resized_frame = cv2.resize(frame, (VID_W, VID_H))
-        frameClass.updateFrame(image=resized_frame)  # update image only
+        image = cv2.resize(frame, (VID_W, VID_H))
+
+        if ratio > 1:
+            rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_LINEAR)
+            ah, aw = rsz_image.shape[:2]
+            dn = round(ah * 0.5 + VID_H * 0.5)
+            up = round(ah * 0.5 - VID_H * 0.5)
+            lt = round(aw * 0.5 - VID_W * 0.5)
+            rt = round(aw * 0.5 + VID_W * 0.5)
+            rsz_image = rsz_image[up:dn, lt:rt]
+        else:
+            rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
+
+        frameClass.updateFrame(image=rsz_image)  # update image only
         CamMan.save_frame(camID=camID, frame=frameClass)
 
         cv2.waitKey(15)

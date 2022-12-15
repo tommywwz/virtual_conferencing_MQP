@@ -30,20 +30,20 @@ class Frame:
             # self.edge_y = int(np.floor(self.edge_y * ref_ratio))
             # self.edge_line[0] = self.edge_line[0] * ref_ratio
 
-        # print("HERE: "+ str(self.CamID) + ": " + str(self.ref_ratio))
-        adjust_w = round(w * self.ref_ratio)
-        adjust_h = round(h * self.ref_ratio)
-        new_shape = (adjust_w, adjust_h)
-        if self.ref_ratio > 1:
-            rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_LINEAR)
-            ah, aw = rsz_image.shape[:2]
-            dn = round(ah * 0.5 + h * 0.5)
-            up = round(ah * 0.5 - h * 0.5)
-            lt = round(aw * 0.5 - w * 0.5)
-            rt = round(aw * 0.5 + w * 0.5)
-            rsz_image = rsz_image[up:dn, lt:rt]
-        else:
-            rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
+        ## print("HERE: "+ str(self.CamID) + ": " + str(self.ref_ratio))
+        # adjust_w = round(w * self.ref_ratio)
+        # adjust_h = round(h * self.ref_ratio)
+        # new_shape = (adjust_w, adjust_h)
+        # if self.ref_ratio > 1:
+        #     rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_LINEAR)
+        #     ah, aw = rsz_image.shape[:2]
+        #     dn = round(ah * 0.5 + h * 0.5)
+        #     up = round(ah * 0.5 - h * 0.5)
+        #     lt = round(aw * 0.5 - w * 0.5)
+        #     rt = round(aw * 0.5 + w * 0.5)
+        #     rsz_image = rsz_image[up:dn, lt:rt]
+        # else:
+        #     rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
 
-        self.img = rsz_image
+        self.img = image
 

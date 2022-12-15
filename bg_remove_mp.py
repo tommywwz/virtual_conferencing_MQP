@@ -69,8 +69,9 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
     loc_bgIMG = bg_img.copy()
     fit_h, fit_w = fit_shape
     bg_h, bg_w, bg_c = bg_img.shape
-    reference_y = int(np.floor(bg_h * 6 / 7))  # reference table line in background
-    loc_bgIMG[reference_y:bg_h, 0:bg_w] = [120, 120, 120]
+    reference_y = int(np.floor(bg_h * 0.82))  # reference table line in background
+    table_color = (35, 53, 88)
+    loc_bgIMG[reference_y:bg_h, 0:bg_w] = table_color
     h_margin, w_margin = margins[0], margins[1]
     i = 0
 
@@ -135,7 +136,7 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
             # normalize the mask to the range of 0 to 1
 
             # mask, condition = segbg.mask_bg(cropped_cam)
-            replacedBG_cam = segbg.replace_bg(cropped_cam, cropped_bg)
+            replacedBG_cam = segbg.replace_bg(cropped_cam, cropped_bg, threshold=.7)
 
             # mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
 
