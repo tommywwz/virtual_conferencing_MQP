@@ -190,7 +190,7 @@ class HeadTrack:
             down_boundary = x_center + halfFOV_h
             outputFrame = outputFrame[up_boundary:down_boundary, left_boundary:right_boundary]
 
-        cv2.imshow("debug", user_cam)
+        # cv2.imshow("debug", user_cam)
 
         return outputFrame
 

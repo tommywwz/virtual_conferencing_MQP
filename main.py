@@ -7,7 +7,8 @@ import logging
 import HeadTrack
 import bg_remove_mp as bgmp
 import edge_detection
-import Frame
+from AutoResize import AutoResize
+from Frame import Frame
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -30,7 +31,7 @@ R = RAW_CAM_H / RAW_CAM_W
 BLUE = (255, 0, 0)
 
 vid1 = "vid/demo2.mp4"
-vid2 = "vid/demo1.MOV"
+vid2 = "vid/demo1.mp4"
 vid3 = "vid/demo3.mp4"
 vid4 = "vid/demo4.mp4"
 vid5 = "vid/demo5.mp4"
@@ -63,8 +64,8 @@ def stackParam(cam_dict, bg_shape: int):
 
     fit_shape = (int(fit_height), int(fit_width))
 
-    margin_h = np.floor((bg_h - fit_height) / 2)
-    margin_w = np.floor((w_step - fit_width) / 2)
+    margin_h = np.floor((bg_h - fit_height)*0.5)
+    margin_w = np.floor((w_step - fit_width)*0.5)
     margins = [int(margin_h), int(margin_w)]
 
     return fit_shape, w_step, margins
@@ -118,7 +119,7 @@ class CamManagement:
     # def get_edge_y(self):
     #     return self.edge_y
 
-    def toggle_calib(self, camID):
+    def toggle_calib(self):
         self.calib = not self.calib
 
 
@@ -141,36 +142,52 @@ class CamThread(threading.Thread):
 def videoPreview(previewName, camID):
     cam = cv2.VideoCapture(vids[camID])
     ed = edge_detection.EdgeDetection()
+    frameClass = Frame(camID)
+    autoResize = AutoResize()
     frame_counter = 0
     calib_length = 50
-    frameClass = Frame.Frame(camID)
 
-    while True:
+    while True:  # demo video calib phase
         success, frame = cam.read()
-        if not success:
+
+        if not success:  # check if video is played to the end
             cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
             # restart the video from the first frame if it is ended
             continue
-        else:
-            resized_frame = cv2.resize(frame, (VID_W, VID_H))
-            if frame_counter < calib_length:
-                frame_counter += 1
-                edge = ed.process_frame(resized_frame, threshold=100)
-                a, b = edge
 
-                if a is not None and b is not None:
-                    h, w, c = resized_frame.shape
-                    cv2.line(resized_frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
-                    # CamMan.save_edge(camID, [a, b])
-                    # cv2.imshow("test"+str(camID), resized_frame)
-                else:
-                    edge = (0, 0)
-                    # CamMan.save_edge(camID, [0, 0])
-                frameClass.updateFrame(image=resized_frame, edge_line=edge)  # update edge information
+        resized_frame = cv2.resize(frame, (VID_W, VID_H))
+        if frame_counter < calib_length:
+            ratio = autoResize.resize(resized_frame, 100)
+            print("cam" + str(camID) + " ratio: " + str(ratio))
+            frame_counter += 1
+            edge = ed.process_frame(resized_frame, threshold=100)
+            a, b = edge
+            if a is not None and b is not None:
+                h, w, c = resized_frame.shape
+                cv2.line(resized_frame, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
+                # cv2.imshow("test"+str(camID), resized_frame)
             else:
-                frameClass.updateFrame(image=resized_frame)  # update image only
+                edge = (0, 0)
+            frameClass.updateFrame(image=resized_frame, edge_line=edge, ref_ratio=ratio)  # update edge information
+        else:
+            break
 
-            CamMan.save_frame(camID=camID, frame=frameClass)
+        CamMan.save_frame(camID=camID, frame=frameClass)
+        cv2.waitKey(15)
+        if CamMan.check_Term():
+            break
+
+    while True:  # demo video running phase
+        success, frame = cam.read()
+
+        if not success:  # check if video is played to the end
+            cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            # restart the video from the first frame if it is ended
+            continue
+
+        resized_frame = cv2.resize(frame, (VID_W, VID_H))
+        frameClass.updateFrame(image=resized_frame)  # update image only
+        CamMan.save_frame(camID=camID, frame=frameClass)
 
         cv2.waitKey(15)
         if CamMan.check_Term():
@@ -188,7 +205,7 @@ def camPreview(previewName, camID, if_usercam):
     ed = edge_detection.EdgeDetection()
     cam.set(3, RAW_CAM_W)  # width
     cam.set(4, RAW_CAM_H)  # height
-    frameClass = Frame.Frame(camID)
+    frameClass = Frame(camID)
 
     while True:
         success, frame = cam.read()
@@ -202,24 +219,16 @@ def camPreview(previewName, camID, if_usercam):
         if CamMan.calib and if_usercam:  # check if calibration is toggled in the user's cam thread
             edge = ed.process_frame(frame, threshold=100)
             a, b = edge
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            linetype = cv2.LINE_AA
             cv2.putText(frame,
                         text='Press T when satisfied with table edge',
-                        org=(10, 30),
-                        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                        fontScale=1,
-                        color=(0, 255, 0),
-                        thickness=2,
-                        lineType=cv2.LINE_AA,
-                        bottomLeftOrigin=False)
+                        org=(10, 30), fontFace=font, fontScale=.55, color=(0, 255, 0),
+                        thickness=1, lineType=linetype, bottomLeftOrigin=False)
             cv2.putText(frame,
                         text='Please make sure your hands are below the table',
-                        org=(10, VID_H - 10),
-                        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                        fontScale=.4,
-                        color=(0, 0, 255),
-                        thickness=1,
-                        lineType=cv2.LINE_AA,
-                        bottomLeftOrigin=False)
+                        org=(10, VID_H - 10), fontFace=font, fontScale=.4, color=(0, 0, 255),
+                        thickness=1, lineType=linetype, bottomLeftOrigin=False)
             if a is not None and b is not None:
                 h, w, c = frame.shape
                 left_intercept = b
@@ -228,35 +237,20 @@ def camPreview(previewName, camID, if_usercam):
                     # check if the edge is intercept with the bottom line of screen
                     cv2.putText(frame,
                                 text='Try to rotate your camera to the right',
-                                org=(10, VID_H - 30),
-                                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                                fontScale=.4,
-                                color=(0, 255, 255),
-                                thickness=1,
-                                lineType=cv2.LINE_AA,
-                                bottomLeftOrigin=False)
+                                org=(10, VID_H - 30), fontFace=font, fontScale=.4, color=(0, 255, 255),
+                                thickness=1, lineType=linetype, bottomLeftOrigin=False)
                     cv2.line(frame, (0, round(left_intercept)), (w, round(right_intercept)), (0, 255, 255), 2)
                 elif right_intercept > h:
                     cv2.putText(frame,
                                 text='Try to rotate your camera to the left',
-                                org=(10, VID_H - 30),
-                                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                                fontScale=.4,
-                                color=(0, 255, 255),
-                                thickness=1,
-                                lineType=cv2.LINE_AA,
-                                bottomLeftOrigin=False)
+                                org=(10, VID_H - 30), fontFace=font, fontScale=.4, color=(0, 255, 255),
+                                thickness=1, lineType=linetype, bottomLeftOrigin=False)
                     cv2.line(frame, (0, round(left_intercept)), (w, round(right_intercept)), (0, 255, 255), 2)
                 else:
                     cv2.putText(frame,
                                 text='Perfect!',
-                                org=(10, VID_H - 30),
-                                fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                                fontScale=.4,
-                                color=(0, 255, 0),
-                                thickness=1,
-                                lineType=cv2.LINE_AA,
-                                bottomLeftOrigin=False)
+                                org=(10, VID_H - 30), fontFace=font, fontScale=.4, color=(0, 255, 0),
+                                thickness=1, lineType=linetype, bottomLeftOrigin=False)
                     cv2.line(frame, (0, round(left_intercept)), (w, round(right_intercept)), (0, 255, 0), 2)
             else:
                 edge = (0, 0)
@@ -267,7 +261,7 @@ def camPreview(previewName, camID, if_usercam):
             frameClass.updateFrame(image=frame)  # if not in calibration, update frame only
 
         CamMan.save_frame(camID=camID, frame=frameClass)
-        logging.debug(str(frameClass.edge_line))
+        # logging.debug(str(frameClass.edge_line))
 
         if CamMan.check_Term():
             break
@@ -293,8 +287,8 @@ def ctlThread():
     CamMan.open_cam(camID=userCam, if_user=True)
     # CamMan.open_cam(camID=clientCam)
     # CamMan.open_cam(camID=101, if_demo=True)
-    CamMan.open_cam(camID=102, if_demo=True)
-    CamMan.open_cam(camID=103, if_demo=True)
+    CamMan.open_cam(camID=101, if_demo=True)
+    CamMan.open_cam(camID=104, if_demo=True)
     # CamMan.open_cam(camID=105, if_demo=True)
 
     while True:
@@ -313,11 +307,7 @@ def ctlThread():
             cam_loaded = cam_count
             fit_shape, w_step, margins = stackParam(frame_dict, imgBG.shape)
 
-        # cam_edge_y = CamMan.get_edge_y()
-        # edge_lines = CamMan.get_edge()
-
         imgStacked = bgmp.stackIMG(frame_dict, imgBG, fit_shape, w_step, margins)
-
 
         # temp = np.subtract(imgStacked, BLUE)
         #
@@ -354,13 +344,11 @@ def ctlThread():
         imgBG_output = ht.HeadTacker(user_feed, imgStacked, hist=10)
         cv2.imshow(name, imgBG_output)
 
-        # cv2.imshow("Test", alpha_grey)
-
         key = cv2.waitKey(1)
         if key & 0xFF == ord('q'):
             break
         elif key & 0xFF == ord('t'):
-            CamMan.toggle_calib(userCam)
+            CamMan.toggle_calib()
             if not CamMan.calib:  # check if calib is toggled to false
                 ht.set_calib()  # tell head tracking method to start calibration
                 cv2.destroyWindow(calib_window)
