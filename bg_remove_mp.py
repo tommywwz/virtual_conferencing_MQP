@@ -190,6 +190,7 @@ def scale_contour(cnt, scale):
 
     return cnt_scaled
 
+
 def unique_count_app(frame_w_blackmask):
     raw_frame_unfold = frame_w_blackmask.reshape(-1, frame_w_blackmask.shape[-1])
     non_black_mask = raw_frame_unfold != (0, 0, 0)

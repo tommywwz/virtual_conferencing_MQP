@@ -278,7 +278,7 @@ def ctlThread():
     # CamMan.open_cam(camID=clientCam)
     # CamMan.open_cam(camID=101, if_demo=True)
     CamMan.open_cam(camID=102, if_demo=True)
-    CamMan.open_cam(camID=104, if_demo=True)
+    CamMan.open_cam(camID=103, if_demo=True)
     # CamMan.open_cam(camID=105, if_demo=True)
 
     while True:

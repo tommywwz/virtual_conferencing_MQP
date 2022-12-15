@@ -78,7 +78,9 @@ class AutoResize:
 
         return frame
 
-DEBUG = True
+
+DEBUG = False
+
 if DEBUG:
     auto_rsz = AutoResize()
 
