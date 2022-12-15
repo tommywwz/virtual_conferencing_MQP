@@ -133,7 +133,7 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
             cam_cnt = scale_contour(cam_cnt, 0.87)  # scale down the contour to make the gradian change more natural
             cv2.drawContours(fg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour with white color
             fg_mask = cv2.GaussianBlur(fg_mask, (31, 31), 0)  # blur the edge of the foreground contour
-            cv2.imshow("mask" + str(camID), fg_mask)
+            # cv2.imshow("mask" + str(camID), fg_mask)
             fg_mask = cv2.normalize(fg_mask, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
             # normalize the mask to the range of 0 to 1
 
@@ -152,7 +152,7 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
             foreground[-top_spacing:fit_h, x_left:x_right, :] = merged_cam
             loc_bgIMG = background * (1 - fg_mask) + foreground * fg_mask
             loc_bgIMG = cv2.normalize(loc_bgIMG, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
-            cv2.imshow("out" + str(camID), loc_bgIMG)
+            # cv2.imshow("out" + str(camID), loc_bgIMG)
 
             # loc_bgIMG[-top_spacing:fit_h, x_left:x_right, :] = merged_cam
 
@@ -171,7 +171,6 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
             cam_cnt = scale_contour(cam_cnt, 0.87)  # scale down the contour to make the gradian change more natural
             cv2.drawContours(fg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour with white color
             fg_mask = cv2.GaussianBlur(fg_mask, (31, 31), 0)  # blur the edge of the foreground contour
-            cv2.imshow("mask" + str(camID), fg_mask)
             fg_mask = cv2.normalize(fg_mask, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
             # normalize the mask to the range of 0 to 1
 

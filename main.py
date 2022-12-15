@@ -20,8 +20,8 @@ RAW_CAM_W = VID_H  # original camera setting is in landscape (will be rotated to
 RAW_CAM_H = VID_W  # so the camera's height & width is demo video's width & height
 RAW_CAM_SHAPE = (RAW_CAM_H, RAW_CAM_W, 3)
 
-BG_W = 640
-BG_H = 360
+BG_W = 720
+BG_H = 480
 BG_SHAPE = (BG_H, BG_W, 3)
 BG_DIM = (BG_W, BG_H)  # (w, h)
 
@@ -314,7 +314,7 @@ def ctlThread():
     cv2.namedWindow(name)
 
     imgBG = cv2.imread(
-        "background/graphicstock-blurred-bokeh-interior-background-image-in-whites_B-3xL3NnluW_thumb.jpg")
+        "background/background_demo_1.jpg")
     imgBG = cv2.resize(imgBG, BG_DIM)
 
     CamMan.open_cam(camID=userCam, if_user=True)
