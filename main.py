@@ -324,6 +324,8 @@ def ctlThread():
     CamMan.open_cam(camID=104, if_demo=True)
     # CamMan.open_cam(camID=105, if_demo=True)
 
+    a_rsz = AutoResize()
+
     while True:
         frame_dict = CamMan.get_frames()
 
@@ -375,6 +377,7 @@ def ctlThread():
         # ref_y = round(BG_H*6/7)
         # cv2.line(imgStacked, (0, ref_y), (BG_W, ref_y), (255, 255, 0))
         imgBG_output = ht.HeadTacker(user_feed, imgStacked, hist=10)
+        a_rsz.check_bound(user_feed, imgBG_output)
         cv2.imshow(name, imgBG_output)
 
         key = cv2.waitKey(1)

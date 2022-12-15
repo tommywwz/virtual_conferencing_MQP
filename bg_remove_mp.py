@@ -1,6 +1,8 @@
 import mediapipe as mp
 import cv2
 import numpy as np
+
+
 #
 # background_mp = mp.solutions.selfie_segmentation
 # mp_selfie_segmentation = background_mp.SelfieSegmentation
@@ -69,8 +71,8 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
     loc_bgIMG = bg_img.copy()
     fit_h, fit_w = fit_shape
     bg_h, bg_w, bg_c = bg_img.shape
-    reference_y = int(np.floor(bg_h * 0.82))  # reference table line in background
-    table_color = (35, 53, 88)
+    reference_y = int(np.floor(bg_h * 0.77))  # reference table line in background
+    table_color = (24, 32, 49)
     loc_bgIMG[reference_y:bg_h, 0:bg_w] = table_color
     h_margin, w_margin = margins[0], margins[1]
     i = 0
@@ -126,7 +128,7 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
             b_l = (x_left, fit_h)
             u_r = (x_right, -top_spacing)
             b_r = (x_right, fit_h)
-            fg_mask = np.zeros((bg_h, bg_w, bg_c), np.uint8)
+            fg_mask = np.zeros((bg_h, bg_w, bg_c), np.uint8)  # initialize the foreground mask w/ all black color
             cam_cnt = np.array([u_l, b_l, b_r, u_r])
             cam_cnt = scale_contour(cam_cnt, 0.87)  # scale down the contour to make the gradian change more natural
             cv2.drawContours(fg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour with white color
@@ -148,29 +150,42 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
             foreground = loc_bgIMG.copy()  # get a copy of current background for blurring
             background = loc_bgIMG.copy()
             foreground[-top_spacing:fit_h, x_left:x_right, :] = merged_cam
-
-            loc_bgIMG = background*(1-fg_mask) + foreground * fg_mask
+            loc_bgIMG = background * (1 - fg_mask) + foreground * fg_mask
             loc_bgIMG = cv2.normalize(loc_bgIMG, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
             cv2.imshow("out" + str(camID), loc_bgIMG)
-
 
             # loc_bgIMG[-top_spacing:fit_h, x_left:x_right, :] = merged_cam
 
         else:
             cropped_cam = rsz_cam[top_spacing:fit_h, :, :]
             cropped_bg = loc_bgIMG[0:fit_h - top_spacing, x_left:x_right, :]
-
             cropped_lower_mask = lower_mask[top_spacing:fit_h, :]
             cropped_upper_mask = cv2.bitwise_not(cropped_lower_mask)
 
-            replacedBG_cam = segbg.replace_bg(cropped_cam, cropped_bg)
+            u_l = (x_left, 0)
+            b_l = (x_left, fit_h - top_spacing)
+            u_r = (x_right, 0)
+            b_r = (x_right, fit_h - top_spacing)
+            fg_mask = np.zeros((bg_h, bg_w, bg_c), np.uint8)  # initialize the foreground mask w/ all black color
+            cam_cnt = np.array([u_l, b_l, b_r, u_r])
+            cam_cnt = scale_contour(cam_cnt, 0.87)  # scale down the contour to make the gradian change more natural
+            cv2.drawContours(fg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour with white color
+            fg_mask = cv2.GaussianBlur(fg_mask, (31, 31), 0)  # blur the edge of the foreground contour
+            cv2.imshow("mask" + str(camID), fg_mask)
+            fg_mask = cv2.normalize(fg_mask, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
+            # normalize the mask to the range of 0 to 1
 
+            replacedBG_cam = segbg.replace_bg(cropped_cam, cropped_bg, threshold=.7)
             lower_cam = cv2.bitwise_and(cropped_cam, cropped_cam, mask=cropped_lower_mask)
             upper_cam = cv2.bitwise_and(replacedBG_cam, replacedBG_cam, mask=cropped_upper_mask)
-            color = unique_count_app(lower_cam)
             merged_cam = cv2.add(lower_cam, upper_cam)
 
-            loc_bgIMG[0:fit_h - top_spacing, x_left:x_right, :] = merged_cam
+            foreground = loc_bgIMG.copy()  # get a copy of current background for blurring
+            background = loc_bgIMG.copy()
+            foreground[0:fit_h - top_spacing, x_left:x_right, :] = merged_cam
+            loc_bgIMG = background * (1 - fg_mask) + foreground * fg_mask
+            loc_bgIMG = cv2.normalize(loc_bgIMG, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+            # loc_bgIMG[0:fit_h - top_spacing, x_left:x_right, :] = merged_cam
         i += 1
 
     return loc_bgIMG
@@ -180,8 +195,8 @@ def scale_contour(cnt, scale):
     # reference:
     # https://medium.com/analytics-vidhya/tutorial-how-to-scale-and-rotate-contours-in-opencv-using-python-f48be59c35a2
     M = cv2.moments(cnt)
-    cx = int(M['m10']/M['m00'])
-    cy = int(M['m01']/M['m00'])
+    cx = int(M['m10'] / M['m00'])
+    cy = int(M['m01'] / M['m00'])
 
     cnt_norm = cnt - [cx, cy]
     cnt_scaled = cnt_norm * scale
