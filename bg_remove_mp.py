@@ -71,7 +71,7 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_edge_y, edge_line
     fit_h, fit_w = fit_shape
     bg_h, bg_w, bg_c = bg_img.shape
     reference_y = int(np.floor(bg_h * 6 / 7))  # reference table line in background
-    loc_bgIMG[reference_y:bg_h, 0:bg_w] = [55, 55, 55]
+    loc_bgIMG[reference_y:bg_h, 0:bg_w] = [120, 120, 120]
     h_margin, w_margin = margins[0], margins[1]
     i = 0
 
@@ -93,19 +93,19 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_edge_y, edge_line
 
         edge_left = (0, round(loc_edge_b))
         edge_right = (fit_w - 1, round(edge_a * fit_w + loc_edge_b))
-        if (loc_edge_b < fit_h) == (loc_edge_b < fit_h):
-            # if both sides of the two edge lines are not crossing the boundary
-            lower_left = (0, fit_h - 1)
-            lower_right = (fit_w, fit_h - 1)
-            contour = np.array([lower_left, lower_right, edge_right, edge_left])
-        elif loc_edge_b > fit_h:
-            x_intercept = round(fit_h - loc_edge_b) / edge_a
-            lower_left = (x_intercept, fit_h - 1)
-            contour = np.array([lower_left, edge_left, edge_right])
-        else:
-            x_intercept = round(fit_h - loc_edge_b) / edge_a
-            lower_right = (x_intercept, fit_h - 1)
-            contour = np.array([lower_right, edge_left, edge_right])
+        # if (loc_edge_b < fit_h) == (loc_edge_b < fit_h):
+        # if both sides of the two edge lines are not crossing the boundary
+        lower_left = (0, fit_h - 1)
+        lower_right = (fit_w, fit_h - 1)
+        contour = np.array([lower_left, lower_right, edge_right, edge_left])
+        # elif loc_edge_b > fit_h:
+        #     x_intercept = round(fit_h - loc_edge_b) / edge_a
+        #     lower_left = (x_intercept, fit_h - 1)
+        #     contour = np.array([lower_left, edge_left, edge_right])
+        # else:
+        #     x_intercept = round(fit_h - loc_edge_b) / edge_a
+        #     lower_right = (x_intercept, fit_h - 1)
+        #     contour = np.array([lower_right, edge_left, edge_right])
 
         lower_mask = np.zeros((fit_h, fit_w), np.uint8)
         cv2.drawContours(lower_mask, [contour], 0, 255, -1)
@@ -126,13 +126,13 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_edge_y, edge_line
             b_l = (x_left, fit_h)
             u_r = (x_right, -top_spacing)
             b_r = (x_right, fit_h)
-            bg_mask = np.zeros((bg_h, bg_w, bg_c), np.uint8)
+            fg_mask = np.zeros((bg_h, bg_w, bg_c), np.uint8)
             cam_cnt = np.array([u_l, b_l, b_r, u_r])
-            cam_cnt = scale_contour(cam_cnt, 0.8)  # scale down the contour to make the gradian change more natural
-            cv2.drawContours(bg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour with white color
-            bg_mask = cv2.GaussianBlur(bg_mask, (81, 81), 0)  # blur the edge of the foreground contour
-            cv2.imshow("mask" + str(camID), bg_mask)
-            bg_mask = cv2.normalize(bg_mask, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
+            cam_cnt = scale_contour(cam_cnt, 0.87)  # scale down the contour to make the gradian change more natural
+            cv2.drawContours(fg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour with white color
+            fg_mask = cv2.GaussianBlur(fg_mask, (31, 31), 0)  # blur the edge of the foreground contour
+            cv2.imshow("mask" + str(camID), fg_mask)
+            fg_mask = cv2.normalize(fg_mask, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
             # normalize the mask to the range of 0 to 1
 
             # mask, condition = segbg.mask_bg(cropped_cam)
@@ -149,7 +149,7 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins, cam_edge_y, edge_line
             background = loc_bgIMG.copy()
             foreground[-top_spacing:fit_h, x_left:x_right, :] = merged_cam
 
-            loc_bgIMG = background*(1-bg_mask) + foreground * bg_mask
+            loc_bgIMG = background*(1-fg_mask) + foreground * fg_mask
             loc_bgIMG = cv2.normalize(loc_bgIMG, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
             cv2.imshow("out" + str(camID), loc_bgIMG)
 
