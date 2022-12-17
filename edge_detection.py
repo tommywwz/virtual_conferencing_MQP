@@ -3,7 +3,6 @@ import numpy as np
 
 # import pyautogui as pg
 
-debug = test = False
 
 
 # frame = cv2.imread("vid/test1.jpg")
@@ -114,6 +113,8 @@ class EdgeDetection:
     # cv2.imshow("lined image", line_image)
 
 
+debug = test = False
+
 if test:
     from pymf import get_MF_devices
     device_list = get_MF_devices()
@@ -122,9 +123,10 @@ if test:
 
     # => opencv_index: 0, device_name: Integrated Webcam
 
-    cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-    cam.set(3, 640)
-    cam.set(4, 360)
+    # cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    # cam.set(3, 640)
+    # cam.set(4, 360)
+    cam = cv2.VideoCapture("vid/demo6.mp4")
     ed = EdgeDetection()
 
     while cam.isOpened():
@@ -132,7 +134,7 @@ if test:
 
         if success:
             cv2.imshow("original", raw_frame)
-            raw_frame = cv2.rotate(raw_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            # raw_frame = cv2.rotate(raw_frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
             ed.process_frame(raw_frame, 100)
 
             if cv2.waitKey(1) & 0xFF == ord('q'):

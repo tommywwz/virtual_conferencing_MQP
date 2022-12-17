@@ -12,7 +12,7 @@ class AutoResize:
         # Boundary Warning flags
         self.bound_warn = [0, 0, 0, 0]
 
-    def resize(self, frame, ref_w, detection_confid=0.7, FIFO_len=5):
+    def resize(self, frame, ref_w, detection_confid=0.7, FIFO_len=2):
 
         with self.mp_facedetector.FaceDetection(min_detection_confidence=detection_confid) as face_detection:
 
@@ -38,10 +38,10 @@ class AutoResize:
 
                 boundBox = int(bBox.xmin * ww), int(bBox.ymin * hh), int(bBox.width * ww), int(bBox.height * hh)
                 # store the boundary information into a tuple with (left most, highest, right most, lowest) location
-                print(boundBox)
+                # print(boundBox)
 
                 box_w = bBox.width*ww
-                print("HERE in AR: " + str(box_w))
+                # print("HERE in AR: " + str(box_w))
                 ref_ratio = ref_w/box_w
                 if len(self.ref_FIFO) >= FIFO_len:
                     self.ref_FIFO.pop(0)

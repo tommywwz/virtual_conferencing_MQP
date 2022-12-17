@@ -35,7 +35,8 @@ vid2 = "vid/demo1.mp4"
 vid3 = "vid/demo3.mp4"
 vid4 = "vid/demo4.mp4"
 vid5 = "vid/demo5.mp4"
-vids = {101: vid1, 102: vid2, 103: vid3, 104: vid4, 105: vid5}
+vid6 = "vid/demo6.mp4"
+vids = {101: vid1, 102: vid2, 103: vid3, 104: vid4, 105: vid5, 106: vid6}
 
 
 def stackParam(cam_dict, bg_shape: int):
@@ -169,7 +170,7 @@ def videoPreview(previewName, camID):
             else:
                 rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
 
-            print("cam" + str(camID) + " ratio: " + str(ratio))
+            # print("cam" + str(camID) + " ratio: " + str(ratio))
             frame_counter += 1
             edge = ed.process_frame(rsz_image, threshold=100)
             a, b = edge
@@ -262,7 +263,6 @@ def camPreview(previewName, camID, if_usercam):
                 h, w, c = frame.shape
                 left_intercept = b
                 right_intercept = w*a+b
-                print("here!!!"+ str(a))
                 if left_intercept > h or a > 0.15:
                     # check if the edge is intercept with the bottom line of screen
                     cv2.putText(frame,
@@ -316,9 +316,10 @@ def ctlThread():
 
     CamMan.open_cam(camID=userCam, if_user=True)
     # CamMan.open_cam(camID=clientCam)
-    # CamMan.open_cam(camID=101, if_demo=True)
     CamMan.open_cam(camID=101, if_demo=True)
+    # CamMan.open_cam(camID=102, if_demo=True)
     CamMan.open_cam(camID=104, if_demo=True)
+    CamMan.open_cam(camID=106, if_demo=True)
     # CamMan.open_cam(camID=105, if_demo=True)
 
     a_rsz = AutoResize()
