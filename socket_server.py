@@ -11,7 +11,7 @@ PORT = 9999
 server_sock = socket.socket(socket.AF_INET,
                             socket.SOCK_STREAM)
 host_name = socket.gethostname()
-host_ip = socket.gethostbyname(host_name)
+host_ip = socket.gethostbyname_ex(host_name)[2][1]
 print('host ip: ' + host_ip)
 
 socket_addr = (host_ip, PORT)
