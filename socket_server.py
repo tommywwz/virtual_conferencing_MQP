@@ -4,14 +4,13 @@ import pickle
 import socket
 import struct
 
-# UDP_IP = "192.168.1.3"
-# UDP_PORT = 5005
 PORT = 9999
 
 server_sock = socket.socket(socket.AF_INET,
                             socket.SOCK_STREAM)
 host_name = socket.gethostname()
-host_ip = socket.gethostbyname_ex(host_name)[2][1]
+host_ips = socket.gethostbyname_ex(host_name)
+host_ip = host_ips[2][1]
 print('host ip: ' + host_ip)
 
 socket_addr = (host_ip, PORT)
@@ -28,7 +27,7 @@ while True:
     client_socket, client_addr = server_sock.accept()
     print('GOT CONNECTION FROM: ', client_addr)
     if client_socket:
-        vid = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        vid = cv2.VideoCapture(3, cv2.CAP_DSHOW)
         while vid.isOpened():
             success, frame = vid.read()
             if success:
