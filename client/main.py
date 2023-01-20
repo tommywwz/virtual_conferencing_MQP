@@ -1,4 +1,5 @@
 # Import cvzone (opencv-python must be in 4.5.5.62), mediapipe
+import os
 import cv2
 import numpy as np
 import threading
@@ -28,6 +29,8 @@ R = RAW_CAM_H / RAW_CAM_W
 # aspect ratio using the ratio of height to width to improve the efficiency of stackIMG function
 BLUE = (255, 0, 0)
 
+current_path = os.path.dirname(__file__)
+root_path = os.path.split(current_path)[0]
 vid1 = "assets/vid/demo2.mp4"
 vid2 = "assets/vid/demo1.mp4"
 vid3 = "assets/vid/demo3.mp4"
@@ -308,8 +311,8 @@ def ctlThread():
     calib_window = 'calibration window'
     cv2.namedWindow(name)
 
-    imgBG = cv2.imread(
-        "assets/background/background_demo_1.jpg")
+    imgBG_path = root_path + '/assets/background/background_demo_1.jpg'
+    imgBG = cv2.imread(imgBG_path)
     imgBG = cv2.resize(imgBG, BG_DIM)
 
     CamMan.open_cam(camID=userCam, if_user=True)
