@@ -392,6 +392,11 @@ def ctlThread():
     cv2.destroyWindow(name)
 
 
+def video_encoding():
+    # process the edge and encode to byte stream
+    a = 12
+
+
 CamMan = CamManagement()
 ht = HeadTrack.HeadTrack()
 logging.info("Starting Control Thread")

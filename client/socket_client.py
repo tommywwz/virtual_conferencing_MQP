@@ -1,37 +1,28 @@
-# reference: https://pyshine.com/Socket-programming-and-openc/
+# TCP reference: https://pyshine.com/Socket-programming-and-openc/
+# UDP_reference: https://pyshine.com/Send-video-over-UDP-socket-in-Python/
 import cv2
-import pickle
 import socket
-import struct
+import base64
+import numpy as np
 
-buff_4K = 4*1024
-# create socket
-client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-host_ip = '192.168.1.143'  # paste your server ip address here
+BUFF_SIZE = 65536
+host_ip = '192.168.1.143'  # host ip
 port = 9999
-client_socket.connect((host_ip, port))  # a tuple
-data = b""
-payload_size = struct.calcsize("Q")
-while True:
-    while len(data) < payload_size:
-        packet = client_socket.recv(buff_4K)  # 4K
-        if not packet: break
-        data += packet
-    packed_msg_size = data[:payload_size]
-    data = data[payload_size:]
-    msg_size = struct.unpack("Q", packed_msg_size)[0]
 
-    while len(data) < msg_size:
-        data += client_socket.recv(buff_4K)
-    frame_data = data[:msg_size]
-    data = data[msg_size:]
-    frame = pickle.loads(frame_data)
+# create socket
+client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+client_sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, BUFF_SIZE)
+
+message = b'Hello'
+client_sock.sendto(message, (host_ip, port))
+
+while True:
+    packet, _ = client_sock.recvfrom(BUFF_SIZE)
+    data = base64.b64decode(packet, ' /')
+    npdata = np.fromstring(data, dtype=np.uint8)
+    frame = cv2.imdecode(npdata, 1)
     cv2.imshow("RECEIVING VIDEO", frame)
     key = cv2.waitKey(1) & 0xFF
     if key == ord('q'):
+        client_sock.close()
         break
-client_socket.close()
-
-
-
-
