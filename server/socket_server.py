@@ -25,6 +25,7 @@ server_sock.bind(socket_addr)
 server_sock.listen(5)
 print('Listening at: ', socket_addr)
 
+data = b""
 payload_size = struct.calcsize("Q")
 
 while True:
