@@ -4,6 +4,7 @@ import pickle
 import socket
 import struct
 import threading
+from wheels.Frame import Frame
 
 PORT = 9999
 buff_4K = 4 * 1024
@@ -19,15 +20,17 @@ def client_joined(client_socket, client_addr):
             packet = client_socket.recv(buff_4K)  # 4K
             if not packet: break
             data += packet
-        packed_msg_size = data[:payload_size]
-        data = data[payload_size:]
+        packed_msg_size = data[:payload_size]  # extracting the packet size information
+        data = data[payload_size:]  # extract the img data from the rest of the packet
         msg_size = struct.unpack("Q", packed_msg_size)[0]
 
         while len(data) < msg_size:
+            # keep loading the data until the entire data received
             data += client_socket.recv(buff_4K)
         frame_data = data[:msg_size]
         data = data[msg_size:]
-        frame = pickle.loads(frame_data)
+        frameClass = pickle.loads(frame_data)
+        frame = frameClass.img
         cv2.imshow(windowName, frame)
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
@@ -54,6 +57,7 @@ def start_listening():
     print('Listening at: ', socket_addr)
 
     while True:
+        # waiting from client connection and create a thread for it
         client_socket, client_addr = server_sock.accept()
         print('GOT NEW CONNECTION FROM: ', client_addr)
         if client_socket:
