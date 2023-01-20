@@ -4,11 +4,9 @@ import numpy as np
 import threading
 import time
 import logging
-import HeadTrack
-import bg_remove_mp as bgmp
-import edge_detection
-from AutoResize import AutoResize
-from Frame import Frame
+from wheels import bg_remove_mp as bgmp, edge_detection, HeadTrack
+from wheels.AutoResize import AutoResize
+from wheels.Frame import Frame
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -30,12 +28,12 @@ R = RAW_CAM_H / RAW_CAM_W
 # aspect ratio using the ratio of height to width to improve the efficiency of stackIMG function
 BLUE = (255, 0, 0)
 
-vid1 = "vid/demo2.mp4"
-vid2 = "vid/demo1.mp4"
-vid3 = "vid/demo3.mp4"
-vid4 = "vid/demo4.mp4"
-vid5 = "vid/demo5.mp4"
-vid6 = "vid/demo6.mp4"
+vid1 = "assets/vid/demo2.mp4"
+vid2 = "assets/vid/demo1.mp4"
+vid3 = "assets/vid/demo3.mp4"
+vid4 = "assets/vid/demo4.mp4"
+vid5 = "assets/vid/demo5.mp4"
+vid6 = "assets/vid/demo6.mp4"
 vids = {101: vid1, 102: vid2, 103: vid3, 104: vid4, 105: vid5, 106: vid6}
 
 
@@ -311,7 +309,7 @@ def ctlThread():
     cv2.namedWindow(name)
 
     imgBG = cv2.imread(
-        "background/background_demo_1.jpg")
+        "assets/background/background_demo_1.jpg")
     imgBG = cv2.resize(imgBG, BG_DIM)
 
     CamMan.open_cam(camID=userCam, if_user=True)
