@@ -13,13 +13,13 @@ port = 9999
 client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 client_sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, BUFF_SIZE)
 
-message = b'Hello'
+message = bytes('Hello', 'utf-8')
 client_sock.sendto(message, (host_ip, port))
 
 while True:
     packet, _ = client_sock.recvfrom(BUFF_SIZE)
     data = base64.b64decode(packet, ' /')
-    npdata = np.fromstring(data, dtype=np.uint8)
+    npdata = np.frombuffer(data, dtype=np.uint8)
     frame = cv2.imdecode(npdata, 1)
     cv2.imshow("RECEIVING VIDEO", frame)
     key = cv2.waitKey(1) & 0xFF
