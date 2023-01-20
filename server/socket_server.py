@@ -12,7 +12,7 @@ server_sock = socket.socket(socket.AF_INET,
 server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, BUFF_SIZE)
 host_name = socket.gethostname()
 host_ips = socket.gethostbyname_ex(host_name)
-host_ip = host_ips[2][1]
+host_ip = "192.168.1.3"
 print('host ip: ' + host_ip)
 
 socket_addr = (host_ip, PORT)

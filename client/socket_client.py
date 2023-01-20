@@ -6,7 +6,7 @@ import base64
 import numpy as np
 
 BUFF_SIZE = 65536
-host_ip = '192.168.1.143'  # host ip
+host_ip = '192.168.1.3'  # host ip
 port = 9999
 
 # create socket
