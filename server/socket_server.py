@@ -25,6 +25,13 @@ def video_client(client_socket, client_addr):
                 break
             data += packet
         packed_msg_size = data[:payload_size]  # extracting the packet size information
+
+        if not packed_msg_size:  # check if client has lost connection
+            client_socket.close()
+            cv2.destroyWindow(windowName)
+            print("Lost connection from client:", client_addr)
+            break
+
         data = data[payload_size:]  # extract the img data from the rest of the packet
         msg_size = struct.unpack("Q", packed_msg_size)[0]
 
@@ -53,6 +60,12 @@ def audio_client(client_socket, client_addr):
             if not packet: break
             data += packet
         packed_msg_size = data[:payload_size]
+
+        if not packed_msg_size:  # check if client has lost connection
+            client_socket.close()
+            print("Lost connection from client:", client_addr)
+            break
+
         data = data[payload_size:]
         msg_size = struct.unpack("Q", packed_msg_size)[0]
 
@@ -124,5 +137,6 @@ def audio_manage():
 video_man = threading.Thread(target=video_manage)
 audio_man = threading.Thread(target=audio_manage)
 video_man.start()
+audio_man.start()
 print("starting thread0")
 
