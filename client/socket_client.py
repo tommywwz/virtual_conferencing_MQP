@@ -12,9 +12,9 @@ IF_QUIT = False
 
 buff_4K = 4*1024
 
-vid = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-vid.set(3, 640)  # width
-vid.set(4, 360)  # height
+cam = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+cam.set(3, 640)  # width
+cam.set(4, 360)  # height
 PORT = 9999
 HOST_IP = '192.168.1.3'  # paste your server ip address here
 
@@ -30,8 +30,8 @@ def video_stream():
 
     client_socket.connect((HOST_IP, PORT))  # a tuple
 
-    while vid.isOpened():
-        success, frame = vid.read()
+    while cam.isOpened():
+        success, frame = cam.read()
         if success:
             rsz_image = frame.copy()  # manipulate raw frame here
             edge = ed.process_frame(rsz_image, threshold=100)
@@ -55,6 +55,7 @@ def video_stream():
             if key == ord('q'):
                 global IF_QUIT
                 IF_QUIT = True
+                cam.release()
                 client_socket.close()
                 break
 
@@ -91,4 +92,4 @@ thread0.join()
 thread1.join()
 
 print("All threads are terminated")
-
+exit(0)
