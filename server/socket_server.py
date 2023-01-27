@@ -175,7 +175,9 @@ def reassemble_audio():
 
 video_man = threading.Thread(target=video_manage)
 audio_man = threading.Thread(target=audio_manage)
+audio_reassemble = threading.Thread(target=reassemble_audio)
 video_man.start()
 audio_man.start()
+audio_reassemble.start()
 print("starting thread0")
 

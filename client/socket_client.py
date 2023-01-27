@@ -65,14 +65,14 @@ def audio_stream():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # Define the server's address and port
-    server_address = ("127.0.0.1", 12345)
+    server_address = (HOST_IP, PORT-1)
 
     # Initialize PyAudio
     p = pyaudio.PyAudio()
 
     # Open a microphone input stream
     stream = p.open(format=pyaudio.paInt16,
-                    channels=1,
+                    channels=2,
                     rate=44100,
                     input=True,
                     frames_per_buffer=1024)
