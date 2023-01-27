@@ -4,7 +4,7 @@ import pickle
 import socket
 import struct
 import threading
-import pyaudio
+import sounddevice as sd
 from wheels import edge_detection
 from wheels.Frame import Frame
 
@@ -60,50 +60,44 @@ def video_stream():
                 break
 
 
+# Create a socket object
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+# Set the server's IP address and port
+server_address = (HOST_IP, PORT-1)
+
+# Get the client's unique identifier
+client_id = input("Enter a unique identifier for the client: ").encode()
+
+# Define the audio settings
+fs = 44100 # Sample rate
+channels = 2 # Number of channels
+
+# Continuously record audio and send it to the server
+packet_number = 0
+
+
+def audio_callback(indata, frames, time, status):
+    global packet_number
+    audio = indata.copy()
+    # Send the audio to the server
+    s.sendto(client_id + b":" + str(packet_number).encode() + b":" + audio.tobytes(), server_address)
+    packet_number += 1
+    # Wait for an acknowledgement from the server
+    s.recvfrom(1024)
+
+
 def audio_stream():
-    # Create a socket object
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # Open the microphone stream
+    stream = sd.InputStream(callback=audio_callback, samplerate=fs, channels=channels)
 
-    # Define the server's address and port
-    server_address = (HOST_IP, PORT-1)
+    stream.start()
 
-    # Initialize PyAudio
-    p = pyaudio.PyAudio()
-
-    # Open a microphone input stream
-    stream = p.open(format=pyaudio.paInt16,
-                    channels=2,
-                    rate=44100,
-                    input=True,
-                    frames_per_buffer=1024)
-
-    # Create a unique identifier for the client
-    client_id = b"1"
-
-    # Initialize the packet number
-    packet_num = 0
-
-    # Continuously send audio packets to the server
     while True:
-        # Read audio data from the microphone
-        audio_data = stream.read(1024)
-
-        # Pack the data with the packet number and client id
-        packet = client_id + struct.pack("!H", packet_num) + audio_data
-
-        # Send the packet to the server
-        s.sendto(packet, server_address)
-
-        # Increment the packet number
-        packet_num += 1
-
         if IF_QUIT:
             break
-
-    # Close the audio input stream
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
+    # Close the socket
+    s.close()
 
 
 thread0 = threading.Thread(target=video_stream)

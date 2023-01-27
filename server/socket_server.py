@@ -18,9 +18,10 @@ channels = 2
 sample_rate = 44100
 sample_width = 2
 
-clients = {}
+audio_clients = {}
 # Create a lock to protect the clients dictionary
 lock = threading.Lock()
+p = pyaudio.PyAudio()
 
 
 def video_client(client_socket, client_addr):
@@ -115,18 +116,25 @@ def video_manage():
             print("starting thread for client:", client_addr)
 
 
-def client_handler(data, addr):
-    # """Handle incoming data from a client"""
-    # Parse the client's unique identifier from the data
+def handle_client(sock, data, addr):
+    """Handle incoming audio packets from a client"""
+    # Parse the client's unique identifier from the packet
     client_id = data.split(b":")[0]
     # Acquire the lock
     lock.acquire()
     try:
-        # Add the packet to the client's packet list
-        clients[client_id].append(data[4:])
+        # Get the packet number from the packet
+        packet_number = int(data.split(b":")[1])
+        # Add the packet to the list of packets for this client
+        if client_id not in audio_clients:
+            audio_clients[client_id] = {}
+        if packet_number not in audio_clients[client_id]:
+            audio_clients[client_id][packet_number] = data
     finally:
         # Release the lock
         lock.release()
+    # Send an acknowledgement packet to the client
+    sock.sendto(b"ACK", addr)
 
 
 def audio_manage():
@@ -135,49 +143,41 @@ def audio_manage():
     # Bind the socket to a specific address and port
     server_sock.bind((HOST_IP, PORT-1))
 
-    # Continuously listen for incoming packets
+    # Start a new thread to play the audio
+    stream = p.open(format=p.get_format_from_width(2),
+                    channels=2,
+                    rate=44100,
+                    output=True)
+    t = threading.Thread(target=play_audio, args=(stream,))
+    t.start()
+
+    # Continuously listen for incoming audio packets
     while True:
         data, addr = server_sock.recvfrom(1024)
         # Spawn a new thread to handle the client
-        t = threading.Thread(target=client_handler, args=(data, addr))
-        t.start()
+        handler = threading.Thread(target=handle_client, args=(server_sock, data, addr))
+        handler.start()
 
 
-# Reassemble the audio stream from the packets
-def reassemble_audio():
+def play_audio(stream):
+    """Play audio from the stream"""
     while True:
         # Acquire the lock
         lock.acquire()
         try:
-            # Check if all clients have sent packets
-            if len(clients) == len(clients[client_id]):
-                # Sort the packets by packet number
-                for client_id in clients:
-                    clients[client_id].sort(key=lambda x: x[0])
-                # Reassemble the original audio stream
-                audio_stream = b"".join([p[1] for client_id in clients for p in clients[client_id]])
-                # Play the audio stream using PyAudio
-                p = pyaudio.PyAudio()
-                stream = p.open(format=p.get_format_from_width(sample_width),
-                                channels=channels,
-                                rate=sample_rate,
-                                output=True)
-                stream.start_stream()
-                stream.write(audio_stream)
-                stream.stop_stream()
-                stream.close()
-                p.terminate()
-                clients.clear()
+            # Reassemble the audio from all clients
+            audio = b"".join([audio_clients[client_id][packet_number] for client_id in audio_clients for packet_number in audio_clients[client_id]])
         finally:
             # Release the lock
             lock.release()
+        # Write the audio to the stream
+        stream.write(audio)
 
 
 video_man = threading.Thread(target=video_manage)
 audio_man = threading.Thread(target=audio_manage)
-audio_reassemble = threading.Thread(target=reassemble_audio)
+
 video_man.start()
 audio_man.start()
-audio_reassemble.start()
 print("starting thread0")
 
