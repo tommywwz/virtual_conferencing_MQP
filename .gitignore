@@ -5,3 +5,5 @@ vid/
 
 *.pyc
 client/__pycache__/
+server/__pycache__/
+wheels/__pycache__/
