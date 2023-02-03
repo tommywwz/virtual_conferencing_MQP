@@ -1,6 +1,7 @@
 import pyaudio
 import socket
 import threading
+import select
 from socket_server import HOST_IP, PORT
 
 CHUNK = 512
@@ -16,6 +17,7 @@ class ClientHandler(threading.Thread):
         self.client_sock = client_sock
 
     def run(self):
+        inputs = [client]
         p = pyaudio.PyAudio()
         stream = p.open(format=FORMAT,
                         channels=CHANNELS,
@@ -23,7 +25,22 @@ class ClientHandler(threading.Thread):
                         output=True,
                         frames_per_buffer=CHUNK)
         while True:
+            readable, writable, exceptional = select.select(inputs, [], inputs)
+            if exceptional:
+                # The client socket has been closed abruptly
+                client.close()
+                inputs.remove(client)
+                print(str(self.addr) + ": abruptly exit")
+                break
+
             data = self.client_sock.recv(CHUNK)
+            if not data:
+                # The client socket has been closed gracefully
+                client.close()
+                inputs.remove(client)
+                print(str(self.addr) + ": gracefully exit")
+                break
+
             stream.write(data)
 
 
@@ -35,6 +52,7 @@ server.listen(5)
 while True:
     client, client_addr = server.accept()
     if client:
+        print("Got audio connection from: " + str(client_addr))
         clientThread = ClientHandler(client_addr, client)
         clientThread.start()
 

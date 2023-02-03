@@ -5,8 +5,7 @@ import pickle
 import socket
 import struct
 import threading
-import pyaudio
-import wave
+import select
 from wheels.Frame import Frame
 
 PORT = 9999
@@ -20,17 +19,31 @@ sample_width = 2
 
 if __name__ == '__main__':
 
-    audio_clients = {}
-    # Create a lock to protect the clients dictionary
-    lock = threading.Lock()
+    class VideoClientThread(threading.Thread):
+        def __init__(self, client_socket, client_addr):
+            threading.Thread.__init__(self)
+            self.client_socket = client_socket
+            self.client_addr = client_addr
+
+        def run(self):
+            video_client(self.client_socket, self.client_addr)
 
 
     def video_client(client_socket, client_addr):
+        inputs = [client_socket]
         data = b""
         payload_size = struct.calcsize("Q")
         windowName = str(client_addr)
         cv2.namedWindow(windowName)
         while True:
+            readable, writable, exceptional = select.select(inputs, [], inputs)
+            if exceptional:
+                # The client socket has been closed abruptly
+                client_socket.close()
+                inputs.remove(client_socket)
+                print(str(client_addr) + ": abruptly exit")
+                break
+
             while len(data) < payload_size:
                 packet = client_socket.recv(buff_4K)  # 4K
                 if not packet:
@@ -40,8 +53,9 @@ if __name__ == '__main__':
 
             if not packed_msg_size:  # check if client has lost connection
                 client_socket.close()
+                inputs.remove(client_socket)
                 cv2.destroyWindow(windowName)
-                print("Lost connection from client:", client_addr)
+                print("Client:", client_addr, " Exited")
                 break
 
             data = data[payload_size:]  # extract the img data from the rest of the packet
@@ -83,75 +97,13 @@ if __name__ == '__main__':
             client_socket, client_addr = server_sock.accept()
             print('GOT NEW VIDEO CONNECTION FROM: ', client_addr)
             if client_socket:
-                newClientVidThread = threading.Thread(target=video_client, args=(client_socket, client_addr))
+                newClientVidThread = VideoClientThread(client_socket, client_addr)
                 newClientVidThread.start()
                 print("starting thread for client:", client_addr)
 
 
-
-    # def handle_client(sock, data, addr):
-    #     """Handle incoming audio packets from a client"""
-    #     # Parse the client's unique identifier from the packet
-    #     client_id = data.split(b":")[0]
-    #     # Acquire the lock
-    #     lock.acquire()
-    #     try:
-    #         # Get the packet number from the packet
-    #         packet_number = int(data.split(b":")[1])
-    #         # Add the packet to the list of packets for this client
-    #         if client_id not in audio_clients:
-    #             audio_clients[client_id] = {}
-    #         if packet_number not in audio_clients[client_id]:
-    #             audio_clients[client_id][packet_number] = data
-    #     finally:
-    #         # Release the lock
-    #         lock.release()
-    #     # Send an acknowledgement packet to the client
-    #     sock.sendto(b"ACK", addr)
-    #
-    #
-    # def audio_manage():
-    #     server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    #
-    #     # Bind the socket to a specific address and port
-    #     server_sock.bind((HOST_IP, PORT-1))
-    #
-    #     # Start a new thread to play the audio
-    #     stream = p.open(format=p.get_format_from_width(2),
-    #                     channels=2,
-    #                     rate=44100,
-    #                     output=True)
-    #     t = threading.Thread(target=play_audio, args=(stream,))
-    #     t.start()
-    #     print("Audio socket starts listening")
-    #
-    #     # Continuously listen for incoming audio packets
-    #     while True:
-    #         data, addr = server_sock.recvfrom(65507)
-    #         # Spawn a new thread to handle the client
-    #         handler = threading.Thread(target=handle_client, args=(server_sock, data, addr))
-    #         handler.start()
-    #
-    #
-    # def play_audio(stream):
-    #     """Play audio from the stream"""
-    #     while True:
-    #         # Acquire the lock
-    #         lock.acquire()
-    #         try:
-    #             # Reassemble the audio from all clients
-    #             audio = b"".join([audio_clients[client_id][packet_number] for client_id in audio_clients for packet_number in audio_clients[client_id]])
-    #         finally:
-    #             # Release the lock
-    #             lock.release()
-    #         # Write the audio to the stream
-    #         stream.write(audio)
-
-
     video_man = threading.Thread(target=video_manage)
-    # audio_man = threading.Thread(target=audio_manage)
 
     video_man.start()
-    # audio_man.start()
     print("starting thread0")
 
