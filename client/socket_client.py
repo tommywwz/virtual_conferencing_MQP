@@ -10,15 +10,15 @@ from wheels.Frame import Frame
 IF_QUIT = False
 
 buff_4K = 4 * 1024
-
-cam = cv2.VideoCapture(1, cv2.CAP_DSHOW)
-cam.set(3, 640)  # width
-cam.set(4, 360)  # height
 PORT = 9999
-HOST_IP = '192.168.1.13'  # paste your server ip address here
-
+HOST_IP = '192.168.1.3'  # paste your server ip address here
 
 if __name__ == '__main__':
+
+    cam = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+    cam.set(3, 640)  # width
+    cam.set(4, 360)  # height
+
     ed = edge_detection.EdgeDetection()
     camID = socket.gethostbyname(socket.gethostname())
     print(camID)

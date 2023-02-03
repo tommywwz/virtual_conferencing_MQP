@@ -2,3 +2,6 @@ assets/vid/
 experimental/
 images/
 vid/
+
+*.pyc
+client/__pycache__/

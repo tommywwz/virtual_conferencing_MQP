@@ -3,7 +3,7 @@ import socket
 from socket_client import HOST_IP, PORT
 import threading
 
-CHUNK = 1024
+CHUNK = 512
 FORMAT = pyaudio.paInt16
 CHANNELS = 2
 RATE = 44100
