@@ -5,7 +5,7 @@ import threading
 
 CHUNK = 512
 FORMAT = pyaudio.paInt16
-CHANNELS = 2
+CHANNELS = 1
 RATE = 44100
 
 if __name__ == '__main__':
@@ -17,7 +17,7 @@ if __name__ == '__main__':
                         input=True,
                         frames_per_buffer=CHUNK)
         while True:
-            data = stream.read(CHUNK)
+            data = stream.read(CHUNK, exception_on_overflow=False)
             conn.sendall(data)
 
 
