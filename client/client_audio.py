@@ -1,7 +1,6 @@
 import pyaudio
 import socket
 from socket_client import HOST_IP, PORT
-import threading
 
 CHUNK = 512
 FORMAT = pyaudio.paInt16
