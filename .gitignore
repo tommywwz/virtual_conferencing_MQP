@@ -7,3 +7,4 @@ vid/
 client/__pycache__/
 server/__pycache__/
 wheels/__pycache__/
+.idea/
