@@ -29,6 +29,10 @@ if __name__ == '__main__':
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         client_socket.connect((HOST_IP, PORT))  # a tuple
+        while cam.isOpened():
+            # todo need calib there (resize & edge)
+            success, frame = cam.read()
+            break
 
         while cam.isOpened():
             success, frame = cam.read()

@@ -5,29 +5,14 @@ import numpy as np
 import threading
 import time
 import logging
+import struct, select, pickle, Params, socket
+from queue import Queue
 from wheels import bg_remove_mp as bgmp, edge_detection, HeadTrack
 from wheels.AutoResize import AutoResize
 from wheels.Frame import Frame
 
 logging.basicConfig(level=logging.DEBUG)
 
-VID_W = 360
-VID_H = 640
-VID_SHAPE = (VID_H, VID_W, 3)
-
-RAW_CAM_W = VID_H  # original camera setting is in landscape (will be rotated to portrait view in cam thread)
-RAW_CAM_H = VID_W  # so the camera's height & width is demo video's width & height
-RAW_CAM_SHAPE = (RAW_CAM_H, RAW_CAM_W, 3)
-
-BG_W = 720
-BG_H = 480
-BG_SHAPE = (BG_H, BG_W, 3)
-BG_DIM = (BG_W, BG_H)  # (w, h)
-
-SHAPE = (RAW_CAM_H, RAW_CAM_W, 3)
-R = RAW_CAM_H / RAW_CAM_W
-# aspect ratio using the ratio of height to width to improve the efficiency of stackIMG function
-BLUE = (255, 0, 0)
 
 current_path = os.path.dirname(__file__)
 root_path = os.path.split(current_path)[0]
@@ -71,14 +56,14 @@ def stackParam(cam_dict, bg_shape: int):
 
 class CamManagement:
     cam_id = 0
-    reference_y = np.floor(BG_DIM[1] * 6 / 7)
+    reference_y = np.floor(Params.BG_DIM[1] * 6 / 7)
 
     def __init__(self):
-        self.FRAMES = {}
+        self.FRAMES = {}  # a dictionary that holds a queue of Frame data structure
         self.TERM = False
         self.edge_lines = {}  # edge equation (a, b) for each cam
         self.edge_y = {}  # average height of edge for each cam
-        self.empty_frame = np.zeros(SHAPE, dtype=np.uint8)
+        self.empty_frame = np.zeros(Params.SHAPE, dtype=np.uint8)
         self.calib = True
         self.calibCam = None
 
@@ -90,14 +75,29 @@ class CamManagement:
         logging.info("%s: starting", cam_name)
         # self.FRAMES[camID] = self.empty_frame
         # self.edge_lines[camID] = [None, None]
-        self.cam_id += 1  # camera conflicts need to be fixed here
+        self.cam_id += 1  # todo camera conflicts need to be fixed here
         return True
 
-    def save_frame(self, camID, frame):
-        self.FRAMES[camID] = frame
+    def init_frame(self, camID, queue_size=3):
+        # initialize a queue for the given camID
+        # !your must init a frame queue in the dictionary to put and get frames!
+        self.FRAMES[camID] = Queue(maxsize=queue_size)
+
+    def put_frame(self, camID, frame):
+        # put a frame in the queue
+        # !our must init a frame queue in the dictionary to put and get frames!
+        self.FRAMES[camID].put(frame)
 
     def get_frames(self):
-        return self.FRAMES.copy()
+        # !your must init a frame queue in the dictionary to put and get frames!
+        frame_dict = {}
+        for camID in self.FRAMES:
+            frame_dict[camID] = self.FRAMES[camID].get()
+            # extract frame queue by key and save an item from the queue to output dictionary
+        return frame_dict
+
+    def delete_cam(self, camID):
+        self.FRAMES.pop(camID, None)
 
     def set_Term(self, ifTerm: bool):
         self.TERM = ifTerm
@@ -137,7 +137,60 @@ class CamThread(threading.Thread):
             camPreview(self.previewName, self.camID, self.if_usercam)
 
 
+class VideoClientThread(threading.Thread):
+    def __init__(self, client_socket, client_addr):
+        threading.Thread.__init__(self)
+        self.client_socket = client_socket
+        self.client_addr = client_addr
+
+    def run(self):
+        clientThread(self.client_socket, self.client_addr)
+
+
+def clientThread(client_socket, client_addr):
+    inputs = [client_socket]
+    cltAddr_camID, clt_port = client_addr
+    data = b""
+    payload_size = struct.calcsize("Q")
+    CamMan.init_frame(cltAddr_camID)  # initialize the FIFO queue for current camera feed
+    while True:
+        readable, writable, exceptional = select.select(inputs, [], inputs)
+        if exceptional:
+            # The client socket has been closed abruptly
+            client_socket.close()
+            inputs.remove(client_socket)
+            print(str(client_addr) + ": abruptly exit")
+            break
+
+        while len(data) < payload_size:
+            packet = client_socket.recv(Params.buff_4K)  # 4K
+            if not packet:
+                break
+            data += packet
+        packed_msg_size = data[:payload_size]  # extracting the packet size information
+
+        if not packed_msg_size:  # check if client has lost connection
+            client_socket.close()
+            inputs.remove(client_socket)
+            print("Client:", client_addr, " Exited")
+            break
+
+        data = data[payload_size:]  # extract the img data from the rest of the packet
+        msg_size = struct.unpack("Q", packed_msg_size)[0]
+
+        while len(data) < msg_size:
+            # keep loading the data until the entire data received
+            data += client_socket.recv(Params.buff_4K)
+        frame_data = data[:msg_size]
+        data = data[msg_size:]
+        frameClass = pickle.loads(frame_data)
+        CamMan.put_frame(cltAddr_camID, frameClass)
+
+    CamMan.delete_cam(cltAddr_camID)
+
+
 def videoPreview(previewName, camID):
+    # for video Demo, probably never used
     cam = cv2.VideoCapture(vids[camID])
     ed = edge_detection.EdgeDetection()
     frameClass = Frame(camID)
@@ -153,20 +206,20 @@ def videoPreview(previewName, camID):
             # restart the video from the first frame if it is ended
             continue
 
-        image = cv2.resize(frame, (VID_W, VID_H))
+        image = cv2.resize(frame, (Params.VID_W, Params.VID_H))
         if frame_counter < calib_length:
             ratio = autoResize.resize(image, 100)
 
-            adjust_w = round(VID_W * ratio)
-            adjust_h = round(VID_H * ratio)
+            adjust_w = round(Params.VID_W * ratio)
+            adjust_h = round(Params.VID_H * ratio)
             new_shape = (adjust_w, adjust_h)
             if ratio > 1:
                 rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_LINEAR)
                 ah, aw = rsz_image.shape[:2]
-                dn = round(ah * 0.5 + VID_H * 0.5)
-                up = round(ah * 0.5 - VID_H * 0.5)
-                lt = round(aw * 0.5 - VID_W * 0.5)
-                rt = round(aw * 0.5 + VID_W * 0.5)
+                dn = round(ah * 0.5 + Params.VID_H * 0.5)
+                up = round(ah * 0.5 - Params.VID_H * 0.5)
+                lt = round(aw * 0.5 - Params.VID_W * 0.5)
+                rt = round(aw * 0.5 + Params.VID_W * 0.5)
                 rsz_image = rsz_image[up:dn, lt:rt]
             else:
                 rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
@@ -185,15 +238,15 @@ def videoPreview(previewName, camID):
         else:
             break
 
-        CamMan.save_frame(camID=camID, frame=frameClass)
+        CamMan.put_frame(camID=camID, frame=frameClass)
         cv2.waitKey(15)
         if CamMan.check_Term():
             break
 
     # extract the calibrated parameters for cropping image
     ratio = frameClass.ref_ratio
-    adjust_w = round(VID_W * ratio)
-    adjust_h = round(VID_H * ratio)
+    adjust_w = round(Params.VID_W * ratio)
+    adjust_h = round(Params.VID_H * ratio)
     new_shape = (adjust_w, adjust_h)
 
     while True:  # demo video running phase
@@ -204,21 +257,21 @@ def videoPreview(previewName, camID):
             # restart the video from the first frame if it is ended
             continue
 
-        image = cv2.resize(frame, (VID_W, VID_H))
+        image = cv2.resize(frame, (Params.VID_W, Params.VID_H))
 
         if ratio > 1:
             rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_LINEAR)
             ah, aw = rsz_image.shape[:2]
-            dn = round(ah * 0.5 + VID_H * 0.5)
-            up = round(ah * 0.5 - VID_H * 0.5)
-            lt = round(aw * 0.5 - VID_W * 0.5)
-            rt = round(aw * 0.5 + VID_W * 0.5)
+            dn = round(ah * 0.5 + Params.VID_H * 0.5)
+            up = round(ah * 0.5 - Params.VID_H * 0.5)
+            lt = round(aw * 0.5 - Params.VID_W * 0.5)
+            rt = round(aw * 0.5 + Params.VID_W * 0.5)
             rsz_image = rsz_image[up:dn, lt:rt]
         else:
             rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
 
         frameClass.updateFrame(image=rsz_image)  # update image only
-        CamMan.save_frame(camID=camID, frame=frameClass)
+        CamMan.put_frame(camID=camID, frame=frameClass)
 
         cv2.waitKey(15)
         if CamMan.check_Term():
@@ -234,9 +287,10 @@ def camPreview(previewName, camID, if_usercam):
     # Real time video cap
     cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
     ed = edge_detection.EdgeDetection()
-    cam.set(3, RAW_CAM_W)  # width
-    cam.set(4, RAW_CAM_H)  # height
+    cam.set(3, Params.RAW_CAM_W)  # width
+    cam.set(4, Params.RAW_CAM_H)  # height
     frameClass = Frame(camID)
+    CamMan.init_frame(camID)
 
     while True:
         success, frame = cam.read()
@@ -258,7 +312,7 @@ def camPreview(previewName, camID, if_usercam):
                         thickness=1, lineType=linetype, bottomLeftOrigin=False)
             cv2.putText(frame,
                         text='Please make sure your hands are below the table',
-                        org=(10, VID_H - 10), fontFace=font, fontScale=.4, color=(0, 0, 255),
+                        org=(10, Params.VID_H - 10), fontFace=font, fontScale=.4, color=(0, 0, 255),
                         thickness=1, lineType=linetype, bottomLeftOrigin=False)
             if a is not None and b is not None:
                 h, w, c = frame.shape
@@ -268,19 +322,19 @@ def camPreview(previewName, camID, if_usercam):
                     # check if the edge is intercept with the bottom line of screen
                     cv2.putText(frame,
                                 text='Try to rotate your camera to the left',
-                                org=(10, VID_H - 30), fontFace=font, fontScale=.4, color=(0, 255, 255),
+                                org=(10, Params.VID_H - 30), fontFace=font, fontScale=.4, color=(0, 255, 255),
                                 thickness=1, lineType=linetype, bottomLeftOrigin=False)
                     cv2.line(frame, (0, round(left_intercept)), (w, round(right_intercept)), (0, 255, 255), 2)
                 elif right_intercept > h or a < -0.15:
                     cv2.putText(frame,
                                 text='Try to rotate your camera to the right',
-                                org=(10, VID_H - 30), fontFace=font, fontScale=.4, color=(0, 255, 255),
+                                org=(10, Params.VID_H - 30), fontFace=font, fontScale=.4, color=(0, 255, 255),
                                 thickness=1, lineType=linetype, bottomLeftOrigin=False)
                     cv2.line(frame, (0, round(left_intercept)), (w, round(right_intercept)), (0, 255, 255), 2)
                 else:
                     cv2.putText(frame,
                                 text='Perfect!',
-                                org=(10, VID_H - 30), fontFace=font, fontScale=.4, color=(0, 255, 0),
+                                org=(10, Params.VID_H - 30), fontFace=font, fontScale=.4, color=(0, 255, 0),
                                 thickness=1, lineType=linetype, bottomLeftOrigin=False)
                     cv2.line(frame, (0, round(left_intercept)), (w, round(right_intercept)), (0, 255, 0), 2)
             else:
@@ -291,7 +345,7 @@ def camPreview(previewName, camID, if_usercam):
         else:
             frameClass.updateFrame(image=frame)  # if not in calibration, update frame only
 
-        CamMan.save_frame(camID=camID, frame=frameClass)
+        CamMan.put_frame(camID=camID, frame=frameClass)
         # logging.debug(str(frameClass.edge_line))
 
         if CamMan.check_Term():
@@ -301,9 +355,32 @@ def camPreview(previewName, camID, if_usercam):
     cam.release()
 
 
+def client_acceptor(server_addr, server_port):
+    server_sock = socket.socket(socket.AF_INET,
+                                socket.SOCK_STREAM)
+    host_name = socket.gethostname()
+    host_ips = socket.gethostbyname_ex(host_name)
+    print('host ip: ' + server_addr)
+    server_socket_addr = (server_addr, server_port)
+    # socket bind
+    server_sock.bind(server_socket_addr)
+
+    # socket listen
+    server_sock.listen(5)
+    print('Listening at: ', server_socket_addr)
+
+    while True:
+        # waiting from client connection and create a thread for it
+        client_socket, client_addr = server_sock.accept()
+        print('GOT NEW VIDEO CONNECTION FROM: ', client_addr)
+        if client_socket:
+            newClientVidThread = VideoClientThread(client_socket, client_addr)
+            newClientVidThread.start()
+            print("starting thread for client:", client_addr)
+
+
 def ctlThread():
     userCam = 0
-    clientCam = 0
     fit_shape, w_step, margins = 0, 0, 0
     cam_loaded = 0
 
@@ -313,15 +390,9 @@ def ctlThread():
 
     imgBG_path = root_path + '/assets/background/background_demo_1.jpg'
     imgBG = cv2.imread(imgBG_path)
-    imgBG = cv2.resize(imgBG, BG_DIM)
+    imgBG = cv2.resize(imgBG, Params.BG_DIM)
 
     CamMan.open_cam(camID=userCam, if_user=True)
-    # CamMan.open_cam(camID=clientCam)
-    CamMan.open_cam(camID=101, if_demo=True)
-    # CamMan.open_cam(camID=102, if_demo=True)
-    CamMan.open_cam(camID=104, if_demo=True)
-    CamMan.open_cam(camID=106, if_demo=True)
-    # CamMan.open_cam(camID=105, if_demo=True)
 
     a_rsz = AutoResize()
 
@@ -331,10 +402,21 @@ def ctlThread():
         if not frame_dict:
             continue  # if frame dictionary is empty, continue
         user_feed = frame_dict[userCam].img
+        frame_dict.pop(userCam, None)  # user camera won't be displayed
         if CamMan.calib:  # if calibration is toggled by user
             cv2.imshow(calib_window, user_feed)
 
-        frame_dict.pop(userCam, None)  # user camera won't be displayed
+        if not frame_dict:
+            # if other clients are not connected, continue
+            key = cv2.waitKey(1)
+            if key & 0xFF == ord('q'):
+                break
+            elif key & 0xFF == ord('t'):
+                CamMan.toggle_calib()
+                if not CamMan.calib:  # check if calib is toggled to false
+                    ht.set_calib()  # tell head tracking method to start calibration
+                    cv2.destroyWindow(calib_window)
+            continue
 
         cam_count = len(frame_dict.keys())  # get the number of camera connected
         if cam_count != cam_loaded:  # update the stack parameter everytime a new cam joined
@@ -343,38 +425,6 @@ def ctlThread():
 
         imgStacked = bgmp.stackIMG(frame_dict, imgBG, fit_shape, w_step, margins)
 
-        # temp = np.subtract(imgStacked, BLUE)
-        #
-        # # Transparent mask stores boolean value
-        # mask = (temp == (0, 0, 0))
-        # mask_singleCH = (mask[:, :, 0] & mask[:, :, 1] & mask[:, :, 2])
-        #
-        # alpha = np.zeros(imgStacked.shape, dtype=np.uint8)
-        # imgBG_output = imgBG.copy()temp = np.subtract(imgStacked, BLUE)
-        #
-        # # Transparent mask stores boolean value
-        # mask = (temp == (0, 0, 0))
-        # mask_singleCH = (mask[:, :, 0] & mask[:, :, 1] & mask[:, :, 2])
-        #
-        # alpha = np.zeros(imgStacked.shape, dtype=np.uint8)
-        # imgBG_output = imgBG.copy()
-        # # imgBG_output[mask_bin, :] = imgBG[mask_bin, :]
-        # imgBG_output[~mask_singleCH, :] = imgStacked[~mask_singleCH, :]
-        #
-        # alpha[mask_singleCH] = 0
-        # alpha[~mask_singleCH] = 255
-        # alpha_grey = cv2.cvtColor(alpha, cv2.COLOR_BGR2GRAY)
-        #
-        # contours, hierarchy = cv2.findContours(alpha_grey.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        # image_copy = imgBG_output.copy()
-        # cv2.drawContours(image=image_copy, contours=contours, contourIdx=-1, color=(0, 255, 0), thickness=1,
-        #                  lineType=cv2.LINE_AA)
-        # blurred_img = cv2.GaussianBlur(imgBG_output, (9, 9), 0)
-        # output = np.where(mask == np.array([0, 255, 0]), blurred_img, imgBG_output)
-        # output = np.where(imgStacked == np.array([255, 0, 0]), imgBG, imgStacked)
-
-        # ref_y = round(BG_H*6/7)
-        # cv2.line(imgStacked, (0, ref_y), (BG_W, ref_y), (255, 255, 0))
         imgBG_output = ht.HeadTacker(cv2.flip(user_feed, 1), imgStacked, hist=10)
         a_rsz.check_bound(user_feed, imgBG_output)
         cv2.imshow(name, imgBG_output)
@@ -394,8 +444,12 @@ def ctlThread():
 
 CamMan = CamManagement()
 ht = HeadTrack.HeadTrack()
-logging.info("Starting Control Thread")
+
 thread0 = threading.Thread(target=ctlThread)
+thread_non_block = threading.Thread(target=client_acceptor, args=(Params.HOST_IP, Params.PORT))
+thread_non_block.start()
+logging.info("Socket Acceptor Started!")
+logging.info("Starting Control Thread")
 thread0.start()
 
 # cap0 = cv2.VideoCapture(0, cv2.CAP_DSHOW)

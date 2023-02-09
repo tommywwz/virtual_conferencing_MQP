@@ -7,10 +7,7 @@ import struct
 import threading
 import select
 from wheels.Frame import Frame
-
-PORT = 9999
-buff_4K = 4 * 1024
-HOST_IP = '192.168.1.3'
+from Params import PORT, buff_4K, HOST_IP
 
 # Define the number of channels, sample rate, and sample width
 channels = 2
