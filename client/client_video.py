@@ -15,7 +15,7 @@ HOST_IP = '192.168.1.3'  # paste your server ip address here
 
 if __name__ == '__main__':
 
-    cam = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+    cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     cam.set(3, 640)  # width
     cam.set(4, 360)  # height
 
@@ -37,7 +37,7 @@ if __name__ == '__main__':
         while cam.isOpened():
             success, frame = cam.read()
             if success:
-                rsz_image = frame.copy()  # manipulate raw frame here
+                rsz_image = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # manipulate raw frame here
                 edge = ed.process_frame(rsz_image, threshold=100)
                 a, b = edge
                 if a is not None and b is not None:
