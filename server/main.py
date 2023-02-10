@@ -1,4 +1,3 @@
-# Import cvzone (opencv-python must be in 4.5.5.62), mediapipe
 import os
 import cv2
 import numpy as np
@@ -12,7 +11,7 @@ from wheels.AutoResize import AutoResize
 from wheels.Frame import Frame
 
 logging.basicConfig(level=logging.DEBUG)
-
+FRAMES_lock = threading.Lock()
 
 current_path = os.path.dirname(__file__)
 root_path = os.path.split(current_path)[0]
@@ -31,26 +30,30 @@ def stackParam(cam_dict, bg_shape: int):
     bg_h, bg_w, bg_c = bg_shape
     num_of_cam = len(cam_dict)
     tallest = 0
-    for frameClass in cam_dict.values():
-        h, w, c = frameClass.img.shape
-        ratio = h / w
-        if ratio > tallest:
-            tallest = ratio
+    if num_of_cam:  # check if the frame dict is empty
+        for frameClass in cam_dict.values():
+            h, w, c = frameClass.img.shape
+            ratio = h / w
+            if ratio > tallest:
+                tallest = ratio
 
-    fit_width = w_step = int(np.floor(bg_w / num_of_cam))
+        fit_width = w_step = int(np.floor(bg_w / num_of_cam))
 
-    fit_height = np.floor(fit_width * tallest)
+        fit_height = np.floor(fit_width * tallest)
 
-    if fit_height > bg_h:
-        fit_width = np.floor(bg_h / tallest)
-        fit_height = bg_h
+        if fit_height > bg_h:
+            fit_width = np.floor(bg_h / tallest)
+            fit_height = bg_h
 
-    fit_shape = (int(fit_height), int(fit_width))
+        fit_shape = (int(fit_height), int(fit_width))
 
-    margin_h = np.floor((bg_h - fit_height)*0.5)
-    margin_w = np.floor((w_step - fit_width)*0.5)
-    margins = [int(margin_h), int(margin_w)]
-
+        margin_h = np.floor((bg_h - fit_height)*0.5)
+        margin_w = np.floor((w_step - fit_width)*0.5)
+        margins = [int(margin_h), int(margin_w)]
+    else:
+        # if no cam need to be processed, set all parameter to zero
+        # since these parameters are not need for stackIMG
+        fit_shape = w_step = margins = 0
     return fit_shape, w_step, margins
 
 
@@ -78,26 +81,30 @@ class CamManagement:
         self.cam_id += 1  # todo camera conflicts need to be fixed here
         return True
 
-    def init_frame(self, camID, queue_size=3):
+    def init_cam(self, camID, queue_size=3):
         # initialize a queue for the given camID
         # !your must init a frame queue in the dictionary to put and get frames!
-        self.FRAMES[camID] = Queue(maxsize=queue_size)
+        with FRAMES_lock:
+            self.FRAMES[camID] = Queue(maxsize=queue_size)
 
     def put_frame(self, camID, frame):
         # put a frame in the queue
         # !our must init a frame queue in the dictionary to put and get frames!
+        # No need to lock here
         self.FRAMES[camID].put(frame)
 
     def get_frames(self):
         # !your must init a frame queue in the dictionary to put and get frames!
         frame_dict = {}
-        for camID in self.FRAMES:
-            frame_dict[camID] = self.FRAMES[camID].get()
-            # extract frame queue by key and save an item from the queue to output dictionary
+        with FRAMES_lock:
+            for camID in self.FRAMES:
+                frame_dict[camID] = self.FRAMES[camID].get()
+                # extract frame queue by key and save an item from the queue to output dictionary
         return frame_dict
 
     def delete_cam(self, camID):
-        self.FRAMES.pop(camID, None)
+        with FRAMES_lock:
+            self.FRAMES.pop(camID, None)
 
     def set_Term(self, ifTerm: bool):
         self.TERM = ifTerm
@@ -152,14 +159,15 @@ def clientThread(client_socket, client_addr):
     cltAddr_camID, clt_port = client_addr
     data = b""
     payload_size = struct.calcsize("Q")
-    CamMan.init_frame(cltAddr_camID)  # initialize the FIFO queue for current camera feed
+    CamMan.init_cam(cltAddr_camID)  # initialize the FIFO queue for current camera feed
     while True:
         readable, writable, exceptional = select.select(inputs, [], inputs)
         if exceptional:
             # The client socket has been closed abruptly
             client_socket.close()
             inputs.remove(client_socket)
-            print(str(client_addr) + ": abruptly exit")
+            CamMan.delete_cam(cltAddr_camID)
+            print(Params.WARNING + str(client_addr) + ": abruptly exit" + Params.ENDC)
             break
 
         while len(data) < payload_size:
@@ -172,7 +180,8 @@ def clientThread(client_socket, client_addr):
         if not packed_msg_size:  # check if client has lost connection
             client_socket.close()
             inputs.remove(client_socket)
-            print("Client:", client_addr, " Exited")
+            CamMan.delete_cam(cltAddr_camID)
+            print(Params.OKGREEN + "Client:", client_addr, " Exited" + Params.ENDC)
             break
 
         data = data[payload_size:]  # extract the img data from the rest of the packet
@@ -290,7 +299,7 @@ def camPreview(previewName, camID, if_usercam):
     cam.set(3, Params.RAW_CAM_W)  # width
     cam.set(4, Params.RAW_CAM_H)  # height
     frameClass = Frame(camID)
-    CamMan.init_frame(camID)
+    CamMan.init_cam(camID)
 
     while True:
         success, frame = cam.read()
@@ -406,20 +415,20 @@ def ctlThread():
         if CamMan.calib:  # if calibration is toggled by user
             cv2.imshow(calib_window, user_feed)
 
-        if not frame_dict:
-            # if other clients are not connected, continue
-            key = cv2.waitKey(1)
-            if key & 0xFF == ord('q'):
-                break
-            elif key & 0xFF == ord('t'):
-                CamMan.toggle_calib()
-                if not CamMan.calib:  # check if calib is toggled to false
-                    ht.set_calib()  # tell head tracking method to start calibration
-                    cv2.destroyWindow(calib_window)
-            continue
+        # if not frame_dict:
+        #     # if other clients are not connected, continue
+        #     key = cv2.waitKey(1)
+        #     if key & 0xFF == ord('q'):
+        #         break
+        #     elif key & 0xFF == ord('t'):
+        #         CamMan.toggle_calib()
+        #         if not CamMan.calib:  # check if calib is toggled to false
+        #             ht.set_calib()  # tell head tracking method to start calibration
+        #             cv2.destroyWindow(calib_window)
+        #     continue
 
         cam_count = len(frame_dict.keys())  # get the number of camera connected
-        if cam_count != cam_loaded:  # update the stack parameter everytime a new cam joined
+        if cam_count != cam_loaded:  # update the stack parameter everytime a new cam joined or left
             cam_loaded = cam_count
             fit_shape, w_step, margins = stackParam(frame_dict, imgBG.shape)
 
