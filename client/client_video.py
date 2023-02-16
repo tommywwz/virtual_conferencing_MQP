@@ -4,8 +4,8 @@ import pickle
 import socket
 import struct
 import threading
-from wheels import edge_detection
-from wheels.Frame import Frame
+from Utils import edge_detection
+from Utils.Frame import Frame
 
 IF_QUIT = False
 

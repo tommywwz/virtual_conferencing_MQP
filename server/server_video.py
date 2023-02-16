@@ -6,8 +6,7 @@ import socket
 import struct
 import threading
 import select
-from wheels.Frame import Frame
-from Params import PORT, buff_4K, HOST_IP
+from Utils.Params import PORT, buff_4K, HOST_IP
 
 # Define the number of channels, sample rate, and sample width
 channels = 2
