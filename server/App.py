@@ -4,7 +4,6 @@ from Utils import Params
 import PIL.Image, PIL.ImageTk
 import os
 import video_joint
-import queue
 
 current_path = os.path.dirname(__file__)
 root_path = os.path.split(current_path)[0]
@@ -32,23 +31,14 @@ class App:
         self.delay = 15
         self.root_play_video()
 
-        self.root_window.bind('t', self.new_popup_window)
+        # self.root_window.bind('t', self.new_popup_window)
+        self.calib_btn = tk.Button(self.root_window, text='Calibrate my camera', width=20,
+                                   height=2, bd='3', command=self.new_popup_window)
+        self.calib_btn.pack()
+
+        self.root_window.protocol("WM_DELETE_WINDOW", lambda: self.close(self.root_window))
 
         self.root_window.mainloop()
-
-    # def show_vid(self):
-    #     if self.vid.isOpened():
-    #         ret, frame = self.vid.read()
-    #         # Convert the frame to a Tkinter PhotoImage object
-    #         if ret:
-    #             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    #             img = Pil_imageTk.PhotoImage(image=Pil_image.fromarray(frame))
-    #
-    #             # Show the frame on the canvas
-    #             self.canvas.create_image(0, 0, image=img, anchor=tk.NW)
-    #
-    #             # Repeat the process after a delay of 30ms
-    #             self.window.after(30, self.show_video)
 
     def root_play_video(self):
         frame = self.VI.Q_FrameForDisplay.get()
@@ -58,7 +48,11 @@ class App:
 
         self.root_window.after(self.delay, self.root_play_video)
 
-    def new_popup_window(self, event):
+    def close(self, window):
+        self.VI.stop()
+        window.destroy()
+
+    def new_popup_window(self):
         if self.calib_window_closed:  # when a popup is running: calib_window_closed == False, exit the function
             new_window = tk.Toplevel(self.root_window)
             new_window.title("Calibration")
@@ -70,8 +64,12 @@ class App:
                                height=Params.VID_H)
             canvas.pack()
 
+            btn = tk.Button(new_window, text='Looks Good!', width=20,
+                            height=2, bd='3', command=lambda: close_pop_window(new_window))
+            btn.pack()
+
             # setup closing protocol
-            new_window.protocol("WM_DELETE_WINDOW", lambda: close_window(new_window))
+            new_window.protocol("WM_DELETE_WINDOW", lambda: close_pop_window(new_window))
 
             def pop_play_video():
                 # try:
@@ -85,7 +83,7 @@ class App:
 
             pop_play_video()
 
-            def close_window(window):
+            def close_pop_window(window):
                 # set the flag to indicate that the window has been closed
                 self.calib_window_closed = True
                 self.VI.calib = False

@@ -3,15 +3,12 @@ import cv2
 import numpy as np
 import threading
 import logging
-import struct, select, pickle, socket
 from queue import Queue
 from Utils import edge_detection, HeadTrack, Params, CamManagement
 from Utils import bg_remove_mp as bgmp
 from Utils.AutoResize import AutoResize
 from Utils.Frame import Frame
-
-
-# from Utils.CamManagement import Params
+import video_server
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -164,10 +161,6 @@ def camPreview(CamMan, previewName, camID, if_usercam):
             font = cv2.FONT_HERSHEY_SIMPLEX
             linetype = cv2.LINE_AA
             cv2.putText(frame,
-                        text='Press T when satisfied with table edge',
-                        org=(10, 30), fontFace=font, fontScale=.55, color=(0, 255, 0),
-                        thickness=1, lineType=linetype, bottomLeftOrigin=False)
-            cv2.putText(frame,
                         text='Please make sure your hands are below the table',
                         org=(10, Params.VID_H - 10), fontFace=font, fontScale=.4, color=(0, 0, 255),
                         thickness=1, lineType=linetype, bottomLeftOrigin=False)
@@ -208,7 +201,7 @@ def camPreview(CamMan, previewName, camID, if_usercam):
         if CamMan.check_Term():
             break
 
-    print("Exiting " + previewName)
+    print(Params.OKGREEN + "Exiting UserCam" + previewName + Params.ENDC)
     cam.release()
 
 
@@ -245,53 +238,6 @@ def stackParam(cam_dict, bg_shape: int):
     return fit_shape, w_step, margins
 
 
-def clientThread(CamMan, client_socket, client_addr):
-    inputs = [client_socket]
-    cltAddr_camID, clt_port = client_addr
-    data = b""
-    payload_size = struct.calcsize("Q")
-    CamMan.init_cam(cltAddr_camID)  # initialize the FIFO queue for current camera feed
-    while True:
-        readable, writable, exceptional = select.select(inputs, [], inputs)
-        if exceptional:
-            # The client socket has been closed abruptly
-            client_socket.close()
-            inputs.remove(client_socket)
-            CamMan.delete_cam(cltAddr_camID)
-            print(Params.WARNING + str(client_addr) + ": abruptly exit" + Params.ENDC)
-            break
-
-        while len(data) < payload_size:
-            packet = client_socket.recv(Params.buff_4K)  # 4K
-            if not packet:
-                break
-            data += packet
-        packed_msg_size = data[:payload_size]  # extracting the packet size information
-
-        if not packed_msg_size:  # check if client has lost connection
-            client_socket.close()
-            inputs.remove(client_socket)
-            CamMan.delete_cam(cltAddr_camID)
-            print(Params.OKGREEN + "Client:", client_addr, " Exited" + Params.ENDC)
-            break
-
-        data = data[payload_size:]  # extract the img data from the rest of the packet
-        msg_size = struct.unpack("Q", packed_msg_size)[0]
-
-        while len(data) < msg_size:
-            # keep loading the data until the entire data received
-            data += client_socket.recv(Params.buff_4K)
-        frame_data = data[:msg_size]
-        data = data[msg_size:]
-        frameClass = pickle.loads(frame_data)
-        CamMan.put_frame(cltAddr_camID, frameClass)
-
-        if CamMan.check_Term():
-            break
-
-    CamMan.delete_cam(cltAddr_camID)
-
-
 class VideoInterface:
     def __init__(self):
         self.CamMan = CamManagement.CamManagement()
@@ -300,6 +246,8 @@ class VideoInterface:
         self.Q_userFrame = Queue(maxsize=3)
         self.calib = False
         self.Term = False
+
+        self.server = video_server.VideoServer(Params.HOST_IP, Params.PORT, self.CamMan)
 
     def ctlThread(self):
         CamMan = self.CamMan
@@ -319,7 +267,6 @@ class VideoInterface:
         cam_name = "Camera %s" % str(userCam)
         camThread = CamThread(self.CamMan, cam_name, camID=userCam, if_usercam=True, if_demo=False)
         camThread.start()
-        logging.info("%s: starting", cam_name)
 
         a_rsz = AutoResize()
 
@@ -333,21 +280,6 @@ class VideoInterface:
                 self.Q_userFrame.put(user_feed)
 
             frame_dict.pop(userCam, None)  # user camera won't be displayed
-            # if CamMan.calib:  # if calibration is toggled by user
-            #     cv2.imshow(calib_window, user_feed)
-
-
-            # if not frame_dict:
-            #     # if other clients are not connected, continue
-            #     key = cv2.waitKey(1)
-            #     if key & 0xFF == ord('q'):
-            #         break
-            #     elif key & 0xFF == ord('t'):
-            #         CamMan.toggle_calib()
-            #         if not CamMan.calib:  # check if calib is toggled to false
-            #             ht.set_calib()  # tell head tracking method to start calibration
-            #             cv2.destroyWindow(calib_window)
-            #     continue
 
             cam_count = len(frame_dict.keys())  # get the number of camera connected
             if cam_count != cam_loaded:  # update the stack parameter everytime a new cam joined or left
@@ -359,52 +291,47 @@ class VideoInterface:
             imgBG_output = ht.HeadTacker(cv2.flip(user_feed, 1), imgStacked, hist=10)
             a_rsz.check_bound(user_feed, imgBG_output)
             self.Q_FrameForDisplay.put(imgBG_output)
-            # cv2.imshow(name, imgBG_output)
 
-            # key = cv2.waitKey(1)
-            # if key & 0xFF == ord('q'):
-            #     break
-            # elif key & 0xFF == ord('t'):
-            #     CamMan.toggle_calib()
-            #     if not CamMan.calib:  # check if calib is toggled to false
-            #         ht.set_calib()  # tell head tracking method to start calibration
-            #         cv2.destroyWindow(calib_window)
-
-        CamMan.set_Term(True)  # inform other threads to terminate
-
-    def client_acceptor(self, server_addr, server_port):
-        server_sock = socket.socket(socket.AF_INET,
-                                    socket.SOCK_STREAM)
-        host_name = socket.gethostname()
-        host_ips = socket.gethostbyname_ex(host_name)
-        print('host ip: ' + server_addr)
-        server_socket_addr = (server_addr, server_port)
-        # socket bind
-        server_sock.bind(server_socket_addr)
-
-        # socket listen
-        server_sock.listen(5)
-        print('Listening at: ', server_socket_addr)
-
-        while True:
-            # waiting from client connection and create a thread for it
-            client_socket, client_addr = server_sock.accept()
-            print('GOT NEW VIDEO CONNECTION FROM: ', client_addr)
-            if client_socket:
-                newClientVidThread = threading.Thread(target=clientThread,
-                                                      args=(self.CamMan, client_socket, client_addr))
-                newClientVidThread.start()
-                print("starting thread for client:", client_addr)
+        print(Params.OKGREEN + "Closing Cam Control Thread" + Params.ENDC)
+        CamMan.set_Term(True)  # inform each camera threads to terminate
+        CamMan.dump_frame_queue()
 
     def run(self):
-        thread0 = threading.Thread(target=self.ctlThread, args=())
-        thread_non_block = threading.Thread(target=self.client_acceptor, args=(Params.HOST_IP, Params.PORT))
-        thread_non_block.start()
+        server_thread = threading.Thread(target=self.server.start, args=())
+        server_thread.start()
         logging.info("Socket Acceptor Started!")
-        thread0.start()
-        logging.info("Starting Control Thread")
 
-        # thread0.join()
+        thread0 = threading.Thread(target=self.ctlThread, args=())
+        thread0.start()
+        logging.info("Control Thread Started!")
+        # thread_non_block = threading.Thread(target=self.client_acceptor, args=(Params.HOST_IP, Params.PORT))
+        # thread_non_block.start()
+        # logging.info("Socket Acceptor Started!")
+
+    def stop(self):
+        self.server.stop()
+        self.Term = True
+
+        print("!!Dumping main window queue!!")
+        if not self.Q_FrameForDisplay.empty():
+            while not self.Q_FrameForDisplay.empty():
+                item = self.Q_FrameForDisplay.get()
+                print("dequeued one item")
+        else:
+            print("The queue is empty.")
+
+        print("!!Dumping selfie queue!!")
+        if not self.Q_userFrame.empty():
+            while not self.Q_userFrame.empty():
+                item = self.Q_userFrame.get()
+                print("dequeued one item")
+        else:
+            print("The queue is empty.")
+
+        for thread in threading.enumerate():
+            if thread is not threading.currentThread():
+                thread.join()
+                print("Joined Thread")
 
 
 # VJ = VideoJoint()

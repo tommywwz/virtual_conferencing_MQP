@@ -53,6 +53,17 @@ class CamManagement:
                 # extract frame queue by key and save an item from the queue to output dictionary
         return frame_dict
 
+    def dump_frame_queue(self):
+        with FRAMES_lock:
+            print("!!Dumping frame queue!!")
+            for frame_queue in self.FRAMES.values():
+                if not frame_queue.empty():
+                    while not frame_queue.empty():
+                        item = frame_queue.get()
+                        print("dequeued one item")
+                else:
+                    print("The queue is empty.")
+
     def delete_cam(self, camID):
         with FRAMES_lock:
             self.FRAMES.pop(camID, None)
