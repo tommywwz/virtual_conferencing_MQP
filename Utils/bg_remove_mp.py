@@ -96,19 +96,10 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
 
             edge_left = (0, round(loc_edge_b))
             edge_right = (fit_w - 1, round(edge_a * fit_w + loc_edge_b))
-            # if (loc_edge_b < fit_h) == (loc_edge_b < fit_h):
-            # if both sides of the two edge lines are not crossing the boundary
+
             lower_left = (0, fit_h - 1)
             lower_right = (fit_w, fit_h - 1)
             contour = np.array([lower_left, lower_right, edge_right, edge_left])
-            # elif loc_edge_b > fit_h:
-            #     x_intercept = round(fit_h - loc_edge_b) / edge_a
-            #     lower_left = (x_intercept, fit_h - 1)
-            #     contour = np.array([lower_left, edge_left, edge_right])
-            # else:
-            #     x_intercept = round(fit_h - loc_edge_b) / edge_a
-            #     lower_right = (x_intercept, fit_h - 1)
-            #     contour = np.array([lower_right, edge_left, edge_right])
 
             lower_mask = np.zeros((fit_h, fit_w), np.uint8)
             cv2.drawContours(lower_mask, [contour], 0, 255, -1)
@@ -135,7 +126,7 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
                 fg_mask = np.zeros((bg_h, bg_w, bg_c), np.uint8)  # initialize the foreground mask w/ all black color
                 cam_cnt = np.array([u_l, b_l, b_r, u_r])
                 cam_cnt = scale_contour(cam_cnt, 0.87)  # scale down the contour to make the gradian change more natural
-                cv2.drawContours(fg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour with white color
+                cv2.drawContours(fg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour w/ white color
                 fg_mask = cv2.GaussianBlur(fg_mask, (31, 31), 0)  # blur the edge of the foreground contour
                 # cv2.imshow("mask" + str(camID), fg_mask)
                 fg_mask = cv2.normalize(fg_mask, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
@@ -166,7 +157,7 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
                 fg_mask = np.zeros((bg_h, bg_w, bg_c), np.uint8)  # initialize the foreground mask w/ all black color
                 cam_cnt = np.array([u_l, b_l, b_r, u_r])
                 cam_cnt = scale_contour(cam_cnt, 0.87)  # scale down the contour to make the gradian change more natural
-                cv2.drawContours(fg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour with white color
+                cv2.drawContours(fg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour w/ white color
                 fg_mask = cv2.GaussianBlur(fg_mask, (31, 31), 0)  # blur the edge of the foreground contour
                 # cv2.imshow("mask" + str(camID), fg_mask)
                 fg_mask = cv2.normalize(fg_mask, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
@@ -203,7 +194,7 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
                 fg_mask = np.zeros((bg_h, bg_w, bg_c), np.uint8)  # initialize the foreground mask w/ all black color
                 cam_cnt = np.array([u_l, b_l, b_r, u_r])
                 cam_cnt = scale_contour(cam_cnt, 0.87)  # scale down the contour to make the gradian change more natural
-                cv2.drawContours(fg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour with white color
+                cv2.drawContours(fg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour w/ white color
                 fg_mask = cv2.GaussianBlur(fg_mask, (31, 31), 0)  # blur the edge of the foreground contour
                 # cv2.imshow("mask" + str(camID), fg_mask)
                 fg_mask = cv2.normalize(fg_mask, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)

@@ -2,10 +2,12 @@ import numpy as np
 import threading
 from Utils import Params
 from queue import Queue
+from Utils.Frame import Frame
 
 
 # logging.basicConfig(level=logging.DEBUG)
 FRAMES_lock = threading.Lock()
+camDEL_lock = threading.Lock()
 
 
 class CamManagement:
@@ -13,7 +15,7 @@ class CamManagement:
     reference_y = np.floor(Params.BG_DIM[1] * 6 / 7)
 
     def __init__(self):
-        self.FRAMES = {}  # a dictionary that holds a queue of Frame data structure
+        self.FRAMES_dictQ = {}  # a dictionary that holds a queue of Frame data structure
         self.TERM = False
         # self.edge_lines = {}  # edge equation (a, b) for each cam
         # self.edge_y = {}  # average height of edge for each cam
@@ -36,37 +38,44 @@ class CamManagement:
         # initialize a queue for the given camID
         # !your must init a frame queue in the dictionary to put and get frames!
         with FRAMES_lock:
-            self.FRAMES[camID] = Queue(maxsize=queue_size)
+            self.FRAMES_dictQ[camID] = Queue(maxsize=queue_size)
 
     def put_frame(self, camID, FRAME):
         # put a FRAME class in the queue
         # !our must init a frame queue in the dictionary to put and get frames!
         # No need to lock here
-        self.FRAMES[camID].put(FRAME)
+        self.FRAMES_dictQ[camID].put(FRAME)
 
     def get_frames(self):
         # !your must init a frame queue in the dictionary to put and get frames!
         frame_dict = {}
         with FRAMES_lock:
-            for camID in self.FRAMES:
-                frame_dict[camID] = self.FRAMES[camID].get()
-                # extract frame queue by key and save an item from the queue to output dictionary
+            with camDEL_lock:
+                for camID in self.FRAMES_dictQ:
+                    current_Frame = self.FRAMES_dictQ[camID].get()
+                    if current_Frame.close:
+                        continue  # if the flag frame is detected, continue and release the lock
+                    else:
+                        frame_dict[camID] = current_Frame
+                    # extract frame queue by key and save an item from the queue to output dictionary
         return frame_dict
 
     def dump_frame_queue(self):
-        with FRAMES_lock:
-            print("!!Dumping frame queue!!")
-            for frame_queue in self.FRAMES.values():
-                if not frame_queue.empty():
-                    while not frame_queue.empty():
-                        item = frame_queue.get()
-                        print("dequeued one item")
-                else:
-                    print("The queue is empty.")
+        print("!!Dumping frame queue!!")
+        for frame_queue in self.FRAMES_dictQ.values():
+            if not frame_queue.empty():
+                while not frame_queue.empty():
+                    item = frame_queue.get()
+                    print("dequeued one item")
+            else:
+                print("The queue is empty.")
 
     def delete_cam(self, camID):
-        with FRAMES_lock:
-            self.FRAMES.pop(camID, None)
+        flag_frame = Frame(camID)
+        flag_frame.close = True  # genrate a frame to
+        self.FRAMES_dictQ[camID].put(flag_frame)
+        with camDEL_lock:
+            del self.FRAMES_dictQ[camID]
 
     def set_Term(self, ifTerm: bool):
         self.TERM = ifTerm

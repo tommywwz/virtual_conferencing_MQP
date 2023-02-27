@@ -135,7 +135,7 @@ class HeadTrack:
                 self.tilt_buffer.append(head_dir)
 
                 loc_tilt_buffer = self.tilt_buffer
-                print(len(loc_tilt_buffer))
+                # print(len(loc_tilt_buffer))
                 stb_tilt = np.mean(loc_tilt_buffer, axis=0)
                 stb_x, stb_y = stb_tilt
 

@@ -38,15 +38,15 @@ class VideoServer:
         clientAddr_camID, clt_port = client_addr
         data = b""
         payload_size = struct.calcsize("Q")
-        self.CamMan.init_cam(clientAddr_camID)  # initialize the FIFO queue for current camera feed
+        if not self.exit_event.is_set():
+            self.CamMan.init_cam(clientAddr_camID)  # initialize the FIFO queue for current camera feed
 
         while not self.exit_event.is_set():
             readable, writable, exceptional = select.select(inputs, [], inputs)
             if exceptional:
                 # The client socket has been closed abruptly
-                client_socket.close()
+                # client_socket.close()
                 inputs.remove(client_socket)
-                self.CamMan.delete_cam(clientAddr_camID)
                 print(Params.WARNING + str(client_addr) + ": abruptly exit" + Params.ENDC)
                 break
 
@@ -58,9 +58,8 @@ class VideoServer:
             packed_msg_size = data[:payload_size]  # extracting the packet size information
 
             if not packed_msg_size:  # check if client has lost connection
-                client_socket.close()
+                # client_socket.close()
                 inputs.remove(client_socket)
-                self.CamMan.delete_cam(clientAddr_camID)
                 print(Params.OKGREEN + "Client:", client_addr, " Exited" + Params.ENDC)
                 break
 
@@ -75,7 +74,7 @@ class VideoServer:
             frameClass = pickle.loads(frame_data)
             self.CamMan.put_frame(clientAddr_camID, frameClass)
 
-        client_socket.close()
+        client_socket.close_main_window()
         self.CamMan.delete_cam(clientAddr_camID)
 
     # def handle_client(self, client_socket):

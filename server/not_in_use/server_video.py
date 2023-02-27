@@ -35,7 +35,7 @@ if __name__ == '__main__':
             readable, writable, exceptional = select.select(inputs, [], inputs)
             if exceptional:
                 # The client socket has been closed abruptly
-                client_socket.close()
+                client_socket.close_main_window()
                 inputs.remove(client_socket)
                 print(str(client_addr) + ": abruptly exit")
                 break
@@ -48,7 +48,7 @@ if __name__ == '__main__':
             packed_msg_size = data[:payload_size]  # extracting the packet size information
 
             if not packed_msg_size:  # check if client has lost connection
-                client_socket.close()
+                client_socket.close_main_window()
                 inputs.remove(client_socket)
                 cv2.destroyWindow(windowName)
                 print("Client:", client_addr, " Exited")
@@ -67,7 +67,7 @@ if __name__ == '__main__':
             cv2.imshow(windowName, frame)
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
-                client_socket.close()
+                client_socket.close_main_window()
                 cv2.destroyWindow(windowName)
                 break
 

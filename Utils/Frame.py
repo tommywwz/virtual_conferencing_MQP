@@ -1,5 +1,4 @@
 import numpy as np
-import cv2
 
 
 class Frame:
@@ -17,6 +16,7 @@ class Frame:
         self.edge_line = [0, 0]
         self.edge_y = 0
         self.ref_ratio = 1
+        self.close = False  # inform the thread who is getting the frame to stop receiving it
 
     def updateFrame(self, image, edge_line=None, ref_ratio=None):
         h, w, c = image.shape
