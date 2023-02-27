@@ -74,7 +74,7 @@ class VideoServer:
             frameClass = pickle.loads(frame_data)
             self.CamMan.put_frame(clientAddr_camID, frameClass)
 
-        client_socket.close_main_window()
+        client_socket.close()
         self.CamMan.delete_cam(clientAddr_camID)
 
     # def handle_client(self, client_socket):

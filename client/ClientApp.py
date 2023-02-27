@@ -3,6 +3,7 @@ import sv_ttk
 from Utils import Params
 import ClientVideo
 from PIL import Image, ImageTk
+import cv2
 
 
 class ClientApp:
@@ -31,6 +32,7 @@ class ClientApp:
 
     def play_selfie_video(self):
         img = self.clientVid.get_Queue()
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         buff = Image.fromarray(img)
         self.photo = ImageTk.PhotoImage(image=buff)
         self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)

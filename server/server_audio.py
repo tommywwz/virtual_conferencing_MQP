@@ -56,5 +56,5 @@ while True:
         clientThread = ClientHandler(client_addr, client)
         clientThread.start()
 
-server.close_main_window()
+server.close()
 
