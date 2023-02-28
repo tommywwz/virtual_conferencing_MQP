@@ -49,7 +49,7 @@ class AutoResize:
                 self.ref_FIFO.append(ref_ratio)
                 avg_ratio = np.average(self.ref_FIFO)
 
-        return avg_ratio
+            return avg_ratio
 
     def check_bound(self, frame_user, frame_bg, detection_confid=0.7):
         with self.mp_facedetector.FaceDetection(min_detection_confidence=detection_confid) as face_detection:
