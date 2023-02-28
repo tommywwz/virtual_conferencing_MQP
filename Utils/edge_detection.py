@@ -42,22 +42,22 @@ class EdgeDetection:
         self.stored_lines.clear()
 
     def process_frame(self, portrait_frame, threshold=70):
-        if debug: cv2.imshow("raw", portrait_frame)
+        # if debug: cv2.imshow("raw", portrait_frame)
         h, w, c = portrait_frame.shape
         cropped_image = portrait_frame[int(np.floor(2 * h / 3)):h, :, :]
         cropped_image = cv2.medianBlur(cropped_image, 7)
-        if debug: cv2.imshow("After median blur", cropped_image)
+        # if debug: cv2.imshow("After median blur", cropped_image)
         # cropped_image = cv2.GaussianBlur(cropped_image, (11, 11), 0)
         # cropped_image = cv2.medianBlur(cropped_image, 15)
         # if debug: cv2.imshow("After first blur", cropped_image)
 
         kernel = np.array([[-2, -1, 0], [-1, 1, 1], [0, 1, 2]])
         emboss = cv2.filter2D(cropped_image, -1, kernel)
-        if debug: cv2.imshow("Sharpening", emboss)
+        # if debug: cv2.imshow("Sharpening", emboss)
 
         grey = cv2.cvtColor(emboss, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(grey, (25, 3), 0)
-        if debug: cv2.imshow("After Gaussian blur", blurred)
+        # if debug: cv2.imshow("After Gaussian blur", blurred)
 
         edged = cv2.Canny(blurred, threshold1=10, threshold2=50)
         lines = cv2.HoughLinesP(edged, 1, np.pi / 180,

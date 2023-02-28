@@ -5,12 +5,14 @@ import ClientVideo
 from PIL import Image, ImageTk
 import cv2
 
+CamID = 3
+
 
 class ClientApp:
     def __init__(self, root_window, windowName):
         self.photo = None
         # start client video thread
-        self.clientVid = ClientVideo.ClientVideo()
+        self.clientVid = ClientVideo.ClientVideo(CamID)
         self.clientVid.start()
 
         self.root_window = root_window
@@ -20,6 +22,10 @@ class ClientApp:
         self.canvas = tk.Canvas(root_window, width=Params.VID_W, height=Params.VID_H)
         self.canvas.configure(bg='black')
         self.canvas.place(relx=0.5, rely=0.5, anchor='center')
+
+        self.calib_btn = tk.Button(self.root_window, text='Calibrate my camera', width=20,
+                                   height=2, command=lambda: self.clientVid.toggle_calib())
+        self.calib_btn.pack()
 
         self.root_window.protocol("WM_DELETE_WINDOW", lambda: self.close(self.root_window))
 
@@ -41,9 +47,6 @@ class ClientApp:
 
     def close(self, window):
         self.clientVid.close()
-
-        # dump video queue
-        self.clientVid.dump_Queue()
         window.destroy()
 
 
