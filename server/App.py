@@ -52,7 +52,8 @@ class App:
 
         self.root_window.protocol("WM_DELETE_WINDOW", lambda: self.close_main_window(self.root_window))
 
-        self.delay = 15
+        self.main_delay = 15
+        self.pop_delay = 15
         self.root_play_video()
 
         sv_ttk.set_theme('dark')  # setting up svttk theme
@@ -80,7 +81,7 @@ class App:
             self.photo = ImageTk.PhotoImage(image=buff)
             self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
 
-        self.root_window.after(self.delay, self.root_play_video)
+        self.root_window.after(self.main_delay, self.root_play_video)
 
     def close_main_window(self, window):
         self.VI.stop()
@@ -126,7 +127,7 @@ class App:
 
                 new_window.lift()  # make the window stay on top
 
-                new_window.after(self.delay, pop_play_video)
+                new_window.after(self.pop_delay, pop_play_video)
 
             pop_play_video()
 
