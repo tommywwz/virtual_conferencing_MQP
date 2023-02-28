@@ -43,6 +43,7 @@ class SegmentationBG:
     def replace_bg(self, frame, background, threshold=Threshold):
         # param frame needs to be portrait
         frame_RGB = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
         frame_RGB.flags.writeable = False
         result = self.selfie_segmentation.process(frame_RGB)
         mask = result.segmentation_mask
@@ -83,7 +84,12 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
         for camID in cam_dict:
             frameClass = cam_dict[camID]  # extract the frame of current camera
             frame = frameClass.img
+
+            if frame is None:
+                continue
+
             frame_h, frame_w, frame_c = frame.shape
+            # print("DEBUG: size of frame: ", frame_w, 'x', frame_h)
             edge_y = frameClass.edge_y  # extract the edge location on y-axis
             edge_a, edge_b = frameClass.edge_line  # extract the line equation parameters a, b
             ratio = fit_h / frame_h  # calculate the ratio of fit shape respect to original shape
@@ -92,8 +98,9 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
 
             background_y = round(loc_edge_y * bg_h / fit_h - h_margin*0.5)  # transfer the edge location to background coordinate
             shift_y = background_y - reference_y  # get the distance reference to the background edge line
+            # print("DEBUG: fit of frame: ", fit_w, 'x', fit_h)
             rsz_cam = cv2.resize(frame, (fit_w, fit_h))
-
+            # print("DEBUG: cropped xy: ", rsz_cam.shape)
             edge_left = (0, round(loc_edge_b))
             edge_right = (fit_w - 1, round(edge_a * fit_w + loc_edge_b))
 
@@ -104,10 +111,13 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
             lower_mask = np.zeros((fit_h, fit_w), np.uint8)
             cv2.drawContours(lower_mask, [contour], 0, 255, -1)
 
-            # print("[DEBUG]:" + str(camID) + ": shift_y = " + str(shift_y))
+            max_spacing = fit_h-1
             top_spacing = h_margin - shift_y
+            # print("DEBUG: before clamping top_spacing: ", top_spacing, "h_margin", h_margin, "shift_y", shift_y)
             bottom_spacing = h_margin + shift_y
-            # print("[DEBUG]:" + str(camID) + ": top_spacing = " + str(top_spacing))
+            top_spacing = clamp(top_spacing, -max_spacing, max_spacing)
+            bottom_spacing = clamp(bottom_spacing, -max_spacing, max_spacing)
+
             x_left = w_step * camCounter + w_margin
             x_right = x_left + fit_w
 
@@ -163,10 +173,7 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
                 fg_mask = cv2.normalize(fg_mask, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
                 # normalize the mask to the range of 0 to 1
 
-                # mask, condition = segbg.mask_bg(cropped_cam)
                 replacedBG_cam = segbg.replace_bg(cropped_cam, cropped_bg, threshold=.7)
-
-                # mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
 
                 lower_cam = cv2.bitwise_and(cropped_cam, cropped_cam, mask=cropped_lower_mask)
                 upper_cam = cv2.bitwise_and(replacedBG_cam, replacedBG_cam, mask=cropped_upper_mask)
@@ -196,9 +203,9 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
                 cam_cnt = scale_contour(cam_cnt, 0.87)  # scale down the contour to make the gradian change more natural
                 cv2.drawContours(fg_mask, [cam_cnt], -1, (255, 255, 255), -1)  # mark foreground contour w/ white color
                 fg_mask = cv2.GaussianBlur(fg_mask, (31, 31), 0)  # blur the edge of the foreground contour
-                # cv2.imshow("mask" + str(camID), fg_mask)
-                fg_mask = cv2.normalize(fg_mask, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
+
                 # normalize the mask to the range of 0 to 1
+                fg_mask = cv2.normalize(fg_mask, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
 
                 replacedBG_cam = segbg.replace_bg(cropped_cam, cropped_bg, threshold=.7)
                 lower_cam = cv2.bitwise_and(cropped_cam, cropped_cam, mask=cropped_lower_mask)
@@ -214,6 +221,10 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
             camCounter += 1
 
     return loc_bgIMG
+
+
+def clamp(num, min_val, max_val):
+    return max(min(num, max_val), min_val)
 
 
 def scale_contour(cnt, scale):
@@ -245,10 +256,8 @@ def unique_count_app(frame_w_blackmask):
 
 
 segbg = SegmentationBG()
+if __name__ == "__main__":
 
-DEBUG = False
-
-if DEBUG:
     cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     cam.set(3, 640)
     cam.set(4, 360)
