@@ -2,6 +2,9 @@
 
 This program aims to improve the overall quality of the user experience (QoE) on existing online conference meeting platforms, such as Zoom or Teams. The objective of the system is to explore methods to increase immersion and comfort in virtual meetings while mitigating the negative effects of prolonged use, commonly referred to as "Zoom fatigue." The proposed solution consists of five functional modules: Multiple Target Windows Merging and Alignment, Background Removal, Vision Angle Tilting by Head Orientation, Auto Display Resizing, and Boundary Warning. Importantly, the system does not require additional hardware or virtual reality tools, as a standard built-in or USB webcam is sufficient.
 
+## Demo Video
+https://youtu.be/e3_ayWrDN_o
+
 ## Environment Configuration
 This program was developed and tested on Windows 10 & 11, we strongly recommend using window to run this program.<br /><br />
 **Known issue for Linux system:**
