@@ -69,8 +69,7 @@ class ClientVideo(threading.Thread):
 
         while True:
             with self.close_lock:
-                if self.exit_flag:
-                    break
+                if self.exit_flag: break
 
                 success, frame = self.cam.read()
                 if not success: continue
@@ -87,35 +86,34 @@ class ClientVideo(threading.Thread):
                     place_hold_msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
                     self.client_socket.sendall(place_hold_msg)
                     self.do_calibration(frame)
+                    continue
 
+                # using the resizing ratio to resize image
+                if self.resize_ratio > 1:
+                    # if head is smaller than reference, the photo need to be enlarged
+                    rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_LINEAR)
+                    ah, aw = rsz_image.shape[:2]
+                    dn = round((ah + Params.VID_H) * 0.5)
+                    up = round((ah - Params.VID_H) * 0.5)
+                    lt = round((aw - Params.VID_W) * 0.5)
+                    rt = round((aw + Params.VID_W) * 0.5)
+                    rsz_image = rsz_image[up:dn, lt:rt]
+                    # gets an image the same as the standard shape
                 else:
-                    # using the resizing ratio to resize image
-                    if self.resize_ratio > 1:
-                        # if head is smaller than reference, the photo need to be enlarged
-                        rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_LINEAR)
-                        ah, aw = rsz_image.shape[:2]
-                        dn = round((ah + Params.VID_H) * 0.5)
-                        up = round((ah - Params.VID_H) * 0.5)
-                        lt = round((aw - Params.VID_W) * 0.5)
-                        rt = round((aw + Params.VID_W) * 0.5)
-                        rsz_image = rsz_image[up:dn, lt:rt]
-                        # gets an image the same as the standard shape
-                    else:
-                        # if head is bigger than reference, the photo need to be shrunk
-                        rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_AREA)
-                        # print('resized shape:', rsz_image.shape)
-                        # gets a smaller image here
-                    # end of image resizing
+                    # if head is bigger than reference, the photo need to be shrunk
+                    rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_AREA)
+                    # gets a smaller image here
+                # end of image resizing
 
-                    self.frameClass.updateFrame(image=rsz_image, edge_line=self.edge_line)  # update edge information
+                self.frameClass.updateFrame(image=rsz_image, edge_line=self.edge_line)  # update edge information
 
-                    pickled_frame = pickle.dumps(self.frameClass)
+                pickled_frame = pickle.dumps(self.frameClass)
 
-                    # data length followed by serialized frame object
-                    msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
-                    self.client_socket.sendall(msg)
+                # data length followed by serialized frame object
+                msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
+                self.client_socket.sendall(msg)
 
-                    self.Q_selfie.put(frame)
+                self.Q_selfie.put(frame)
 
     def do_calibration(self, frame):
         # calculate the resizing ratio
@@ -194,44 +192,6 @@ class ClientVideo(threading.Thread):
             self.client_socket.close()
 
 
-# # Create a socket object
-# s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-#
-# # Set the server's IP address and port
-# server_address = (HOST_IP, PORT-1)
-#
-# # Get the client's unique identifier
-# client_id = input("Enter a unique identifier for the client: ").encode()
-#
-# # Define the audio settings
-# fs = 44100 # Sample rate
-# channels = 2 # Number of channels
-#
-# # Continuously record audio and send it to the server
-# packet_number = 0
-
-
-# def audio_callback(indata, frames, time, status):
-#     global packet_number
-#     audio = indata.copy()
-#     # Send the audio to the server
-#     s.sendto(client_id + b":" + str(packet_number).encode() + b":" + audio.tobytes(), server_address)
-#     packet_number += 1
-#     # Wait for an acknowledgement from the server
-#     s.recvfrom(1024)
-#
-#
-# def audio_stream():
-#     # Open the microphone stream
-#     stream = sd.InputStream(callback=audio_callback, samplerate=fs, channels=channels)
-#
-#     stream.start()
-#
-#     while True:
-#         if IF_QUIT:
-#             break
-#     # Close the socket
-#     s.close()
 if __name__ == "__main__":
     camid = 1
     thread0 = ClientVideo(camid)

@@ -10,6 +10,7 @@ from Utils.AutoResize import AutoResize
 from Utils.Frame import Frame
 import video_server
 
+SERVER_CAM_ID = 0
 
 logging.basicConfig(level=logging.DEBUG)
 FRAMES_lock = threading.Lock()
@@ -253,7 +254,7 @@ class VideoInterface:
         CamMan = self.CamMan
         ht = self.ht
 
-        userCam = 0
+        userCam = SERVER_CAM_ID
         fit_shape, w_step, margins = 0, 0, 0
         cam_loaded = 0
 

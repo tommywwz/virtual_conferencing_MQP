@@ -1,3 +1,4 @@
+import errno
 import threading, socket, select, struct, pickle
 from Utils import Params
 import time
@@ -51,10 +52,22 @@ class VideoServer:
                 break
 
             while len(data) < payload_size:
-                packet = client_socket.recv(Params.buff_4K)  # 4K
-                if not packet:
-                    break
-                data += packet
+                try:
+                    packet = client_socket.recv(Params.buff_4K)  # 4K
+                    if not packet:
+                        break
+                    data += packet
+                except socket.error as error:
+                    if error.errno == errno.WSAECONNRESET:
+                        print(Params.WARNING + str(client_addr) + ": connection was forcibly closed by the remote host"
+                              + Params.ENDC)
+                        inputs.remove(client_socket)
+                        self.exit_event.set()
+                        break
+
+            if self.exit_event.is_set():
+                break
+
             packed_msg_size = data[:payload_size]  # extracting the packet size information
 
             if not packed_msg_size:  # check if client has lost connection

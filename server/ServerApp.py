@@ -127,6 +127,8 @@ class App:
 
                 new_window.lift()  # make the window stay on top
 
+                print("here")
+
                 new_window.after(self.pop_delay, pop_play_video)
 
             pop_play_video()
