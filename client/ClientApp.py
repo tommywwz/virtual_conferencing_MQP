@@ -1,18 +1,18 @@
 import tkinter as tk
 import sv_ttk
 from Utils import Params
-import ClientVideo
+from ClientVideo import ClientVideo
 from PIL import Image, ImageTk
 import cv2
 
-CamID = 3
+CamID = 0
 
 
 class ClientApp:
     def __init__(self, root_window, windowName):
         self.photo = None
         # start client video thread
-        self.clientVid = ClientVideo.ClientVideo(CamID)
+        self.clientVid = ClientVideo(CamID)
         self.clientVid.start()
 
         self.root_window = root_window

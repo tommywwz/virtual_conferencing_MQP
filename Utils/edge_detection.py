@@ -1,8 +1,8 @@
 import cv2
 import numpy as np
 
-# import pyautogui as pg
 
+# import pyautogui as pg
 
 
 # frame = cv2.imread("vid/test1.jpg")
@@ -11,8 +11,6 @@ import numpy as np
 
 def gen_key(line, slope):
     [x1, y1, x2, y2] = line[0, 0:4]
-    midpoint = round((y1 + y2) / 20)
-    # key = slope + midpoint
     y_intercept = (y1 - (slope * x1)) / 10
     key = slope + round(y_intercept)
     return key
@@ -21,25 +19,26 @@ def gen_key(line, slope):
 class EdgeDetection:
     def __init__(self):
         self.edge_height = 0
-        self.stored_lines = {}
+        self.line_candidates = {}
         self.lines_denoised = []
-        self.counter = 0
+        self.sample_counter = 0
         self.TANSLOP = np.tan(10)
+        self.regress_line = [None, None]
 
     def add_lines(self, key, line):
-        if self.stored_lines.get(key) is None:
-            self.stored_lines[key] = [line]
+        if self.line_candidates.get(key) is None:
+            self.line_candidates[key] = [line]
         else:
-            self.stored_lines[key].append(line)
+            self.line_candidates[key].append(line)
         # print("counter: %d" % self.counter)
-        self.counter += 1
+        self.sample_counter += 1
 
     def filter_lines(self):
-        self.counter = 0
+        self.sample_counter = 0
         # max_key = max(len(item) for item in stored_lines.values())
-        max_key = max(self.stored_lines, key=lambda x: len(self.stored_lines[x]))
-        self.lines_denoised = self.stored_lines.get(max_key)
-        self.stored_lines.clear()
+        max_key = max(self.line_candidates, key=lambda x: len(self.line_candidates[x]))
+        self.lines_denoised = self.line_candidates.get(max_key)
+        self.line_candidates.clear()
 
     def process_frame(self, portrait_frame, threshold=70):
         # if debug: cv2.imshow("raw", portrait_frame)
@@ -77,39 +76,36 @@ class EdgeDetection:
                         self.add_lines(key=key, line=line)
                         cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
 
-        if self.counter > threshold:
+        if self.sample_counter > threshold:  # when collected enough samples
             self.filter_lines()
 
-        if self.lines_denoised:
-            selected_lines = self.lines_denoised
-            x_values = []
-            y_values = []
-            for denoised_line in selected_lines:
-                for x1, y1, x2, y2 in denoised_line:
-                    cv2.line(line_image, (x1, y1), (x2, y2), (255, 0, 0), 2)  # selected candidates
-                    x_values.extend([x1, x2])
-                    y_values.extend([y1, y2])
+            if self.lines_denoised:
+                selected_lines = self.lines_denoised
+                x_values = []
+                y_values = []
+                for denoised_line in selected_lines:
+                    for x1, y1, x2, y2 in denoised_line:
+                        cv2.line(line_image, (x1, y1), (x2, y2), (255, 0, 0), 2)  # selected candidates
+                        x_values.extend([x1, x2])
+                        y_values.extend([y1, y2])
 
-            # calculate linear regression of selected samples
-            A = np.vstack([x_values, np.ones(len(x_values))]).T
-            y_values = np.array(y_values)[:, np.newaxis]
-            alpha = np.linalg.lstsq(A, y_values, rcond=None)[0]  # find linear least square regression
-            # https://pythonnumericalmethods.berkeley.edu/notebooks/chapter16.04-Least-Squares-Regression-in-Python.html
-            self.edge_height = np.mean(y_values)
-            w = line_image.shape[1]
-            a = alpha[0, 0]
-            b = alpha[1, 0]
-            cv2.line(line_image, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
-            if debug:
-                cv2.imshow("after processing", line_image)
-            b += np.floor(h * 2 / 3)  # convert to full frame coordinate
-            retval = [a, b]
+                # calculate linear regression of selected samples
+                x_vals = np.vstack([x_values, np.ones(len(x_values))]).T
+                y_vals = np.array(y_values)[:, np.newaxis]
+                alpha = np.linalg.lstsq(x_vals, y_vals, rcond=None)[0]  # find linear least square regression
+                # https://pythonnumericalmethods.berkeley.edu/notebooks/chapter16.04-Least-Squares-Regression-in-Python.html
+                self.edge_height = np.mean(y_values)
+                w = line_image.shape[1]
+                a = alpha[0, 0]
+                b = alpha[1, 0]
+                cv2.line(line_image, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
+                if debug:
+                    cv2.imshow("after processing", line_image)
+                b += np.floor(h * 2 / 3)  # convert to full frame coordinate
+                self.regress_line = [a, b]
 
-        else:
-            retval = [None, None]
-
-        # print(retval)
-        return retval
+        # print(self.regress_line)
+        return self.regress_line
     # cv2.imshow("lined image", line_image)
 
 
@@ -117,6 +113,7 @@ debug = test = False
 
 if test:
     from pymf import get_MF_devices
+
     device_list = get_MF_devices()
     for i, device_name in enumerate(device_list):
         print(f"opencv_index: {i}, device_name: {device_name}")
