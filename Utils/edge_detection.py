@@ -3,8 +3,6 @@ import numpy as np
 
 
 # import pyautogui as pg
-
-
 # frame = cv2.imread("vid/test1.jpg")
 # frame = cv2.resize(frame.copy(), (640, 480))
 MAX_SLOP = 10
@@ -44,21 +42,24 @@ def get_regress(list_of_lines):
 
 
 class EdgeLines:
-    def __init__(self, relevance, line):
-        self.relevance = relevance  # relevance value compare to the user preferred location
+    def __init__(self, line, init_length):
+        self.myLength = init_length  # the length of the candidates list
         self.lines = [line]  # a list of lines (x1, x2, y1, y2)
+        self.a_b = None  # the slope and y intersection (Tuple)
 
-    def appendLine(self, relevance, line):
-        self.relevance += relevance
-        self.relevance *= 0.5
+    def appendLine(self, line):
+        self.myLength += 1
         self.lines.append(line)
+
+    def evaluateLine(self):  # calculate linear regression of selected samples
+        self.a_b = get_regress(self.lines)
+        return self.a_b
 
 
 class EdgeDetection:
     def __init__(self):
         self.edge_height = 0
         self.line_candidates = {}  # a dictionary of EdgeLine data structure
-        self.lines_denoised = []
         self.sample_counter = 0
         self.TANSLOP = np.tan(MAX_SLOP)
         self.regress_line = None
@@ -66,10 +67,10 @@ class EdgeDetection:
 
     def add_line(self, key, line):
         if self.line_candidates.get(key) is None:
-            edgeLines = EdgeLines(0, line)
+            edgeLines = EdgeLines(line, init_length=1)
             self.line_candidates[key] = edgeLines
         else:
-            self.line_candidates[key].appendLine(0, line)
+            self.line_candidates[key].appendLine(line)
         # print("counter: %d" % self.counter)
         self.sample_counter += 1
 
@@ -87,23 +88,27 @@ class EdgeDetection:
 
     def filter_lines(self, prefer_point):
         new_cand_dict = {}
+
         self.sample_counter = 0
         # max_key = max(len(item) for item in stored_lines.values())
 
         for key in self.line_candidates:
             edgeLine_obj = self.line_candidates[key]
-            list_length = len(edgeLine_obj.lines)
+            list_length = edgeLine_obj.myLength
             if list_length > 1:  # filter out the single item list
-                a, b = get_regress(edgeLine_obj.lines)
+                a, b = edgeLine_obj.evaluateLine()
                 edgeLine_obj.relevance = self.get_relevance(a, b, prefer_point)
-                new_key = list_length-edgeLine_obj.relevance
-                new_cand_dict[new_key] = edgeLine_obj.lines
+
+                # The new key is generated base on the number of lines in the group
+                # and how close (the relevance) this group to user preference
+                new_key = list_length - edgeLine_obj.relevance
+                new_cand_dict[new_key] = edgeLine_obj
 
         biggest_key = max(new_cand_dict.keys())
         # max_key = max(self.line_candidates, key=lambda x: len(self.line_candidates[x]))
-        # TODO 重新写一下用linear regression的结果来rebuild dictionary
-        self.lines_denoised = new_cand_dict[biggest_key]
+        best_edgeLine_obj = new_cand_dict[biggest_key]
         self.line_candidates.clear()
+        return best_edgeLine_obj
 
     def process_frame(self, portrait_frame, sample_size=70, prefer_point=None):
         # if debug: cv2.imshow("raw", portrait_frame)
@@ -139,28 +144,11 @@ class EdgeDetection:
                         # cv2.line(line_image, (x1, y1), (x2, y2), (0, 255, 255), 2)
 
         if self.sample_counter > sample_size:  # when collected enough samples
-            self.filter_lines(prefer_point)
+            filted_edgeLine_obj = self.filter_lines(prefer_point)
 
-            if self.lines_denoised:
-                a, b = get_regress(self.lines_denoised)
-                # selected_lines = self.lines_denoised
-                # x_values = []
-                # y_values = []
-                # for denoised_line in selected_lines:
-                #     for x1, y1, x2, y2 in denoised_line:
-                #         cv2.line(line_image, (x1, y1), (x2, y2), (255, 0, 0), 2)  # selected candidates
-                #         x_values.extend([x1, x2])
-                #         y_values.extend([y1, y2])
-                #
-                # # calculate linear regression of selected samples
-                # x_vals = np.vstack([x_values, np.ones(len(x_values))]).T
-                # y_vals = np.array(y_values)[:, np.newaxis]
-                # alpha = np.linalg.lstsq(x_vals, y_vals, rcond=None)[0]  # find linear least square regression
-                # # https://pythonnumericalmethods.berkeley.edu/notebooks/chapter16.04-Least-Squares-Regression-in-Python.html
-                # self.edge_height = np.mean(y_values)
-                # w = line_image.shape[1]
-                # a = alpha[0, 0]
-                # b = alpha[1, 0]
+            with filted_edgeLine_obj:
+                a, b = filted_edgeLine_obj.a_b
+
                 cv2.line(line_image, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
                 # if debug:
                 #     cv2.imshow("after processing", line_image)
