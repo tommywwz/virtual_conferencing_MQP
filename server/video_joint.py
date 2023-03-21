@@ -81,7 +81,7 @@ def videoPreview(CamMan, previewName, camID):
 
             # print("cam" + str(camID) + " ratio: " + str(ratio))
             frame_counter += 1
-            edge = ed.process_frame(rsz_image, threshold=100)
+            edge = ed.process_frame(rsz_image, sample_size=100)
             a, b = edge
             if a is not None and b is not None:
                 h, w, c = rsz_image.shape
@@ -157,7 +157,7 @@ def camPreview(CamMan, previewName, camID, if_usercam):
         frame = cv2.rotate(cv2.flip(frame, 1), cv2.ROTATE_90_CLOCKWISE)
 
         if CamMan.calib and if_usercam:  # check if calibration is toggled in the user's cam thread
-            edge = ed.process_frame(frame, threshold=100)
+            edge = ed.process_frame(frame, sample_size=100)
             a, b = edge
             font = cv2.FONT_HERSHEY_SIMPLEX
             linetype = cv2.LINE_AA
