@@ -30,6 +30,8 @@ class ClientVideo(threading.Thread):
         self.resize_ratio = 1
         self.new_shape = (Params.VID_W, Params.VID_H)
 
+        self.mouse_location = None  # location of user mouse click
+
         self.edge_detector = edge_detection.EdgeDetection()
         self.client_auto_resize = AutoResize()
 
@@ -47,11 +49,11 @@ class ClientVideo(threading.Thread):
 
         # calibration before attempting to connect
         while self.cam.isOpened() and self.calib_flag:
-            if self.exit_flag:
-                return  # exit the thread
             success, frame = self.cam.read()
-            frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
             self.do_calibration(frame)
+
+        if self.exit_flag:
+            exit(0)  # exit the thread
 
         while True:  # check connection here
             try:
@@ -116,6 +118,9 @@ class ClientVideo(threading.Thread):
                 self.Q_selfie.put(frame)
 
     def do_calibration(self, frame):
+        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        linetype = cv2.LINE_AA
         # calculate the resizing ratio
         self.resize_ratio = self.client_auto_resize.resize(frame, 100)
         adjust_w = round(Params.VID_W * self.resize_ratio)
@@ -123,23 +128,22 @@ class ClientVideo(threading.Thread):
         self.new_shape = (adjust_w, adjust_h)
 
         # calculate real edge
-        self.edge_line = self.edge_detector.process_frame(frame, threshold=100)
-        a, b = self.edge_line
-
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        linetype = cv2.LINE_AA
+        self.edge_line = self.edge_detector.process_frame(frame, sample_size=100, prefer_point=self.mouse_location)
+        cv2.circle(frame, self.mouse_location, radius=3, color=(255, 0, 255), thickness=-1)
         cv2.putText(frame,
                     text='Please make sure your hands are below the table',
                     org=(10, Params.VID_H - 10), fontFace=font, fontScale=.4, color=(0, 0, 255),
                     thickness=1, lineType=linetype, bottomLeftOrigin=False)
 
-        if a is None or b is None:  # invalid edge line
+        if self.edge_line is None:  # invalid edge line
             cv2.putText(frame,
                         text='Edge is not detected!',
                         org=(10, Params.VID_H - 30), fontFace=font, fontScale=.4, color=(0, 0, 255),
                         thickness=1, lineType=linetype, bottomLeftOrigin=False)
             self.Q_selfie.put(frame)
             return
+
+        a, b = self.edge_line
 
         if self.resize_ratio < 1:
             # if the image is shrunk, adjust the edge location accordingly
@@ -190,6 +194,7 @@ class ClientVideo(threading.Thread):
         with self.close_lock:
             self.cam.release()
             self.client_socket.close()
+        print("Backend Thread Exited")
 
 
 if __name__ == "__main__":

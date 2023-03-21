@@ -31,10 +31,22 @@ class ClientApp:
 
         sv_ttk.set_theme('dark')  # setting up svttk theme
 
+        self.canvas.bind("<Button-1>", self.handle_user_left_click)
+        self.canvas.bind('<Button-3>', self.handle_user_right_click)
+
         self.delay = 15
         self.play_selfie_video()
 
         self.root_window.mainloop()
+
+    def handle_user_right_click(self, event):
+        self.clientVid.mouse_location = None
+
+    def handle_user_left_click(self, event):
+        x = event.x
+        y = event.y
+        self.clientVid.mouse_location = x, y
+        print("Mouse clicked at x =", x, "y =", y)
 
     def play_selfie_video(self):
         img = self.clientVid.get_Queue()
