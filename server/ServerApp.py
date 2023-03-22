@@ -87,6 +87,15 @@ class App:
         self.VI.stop()
         window.destroy()
 
+    def handle_user_right_click(self, event):
+        self.VI.mouse_location_FE = None
+
+    def handle_user_left_click(self, event):
+        x = event.x
+        y = event.y
+        self.VI.mouse_location_FE = x, y
+        print("Mouse clicked at x =", x, "y =", y)
+
     def new_popup_window(self):
         if self.calib_window_closed:  # when a popup is running: calib_window_closed == False, exit the function
             new_window = tk.Toplevel(self.root_window)
@@ -98,6 +107,9 @@ class App:
             canvas = tk.Canvas(new_window, width=Params.VID_W,
                                height=Params.VID_H)
             canvas.pack()
+
+            canvas.bind("<Button-1>", self.handle_user_left_click)
+            canvas.bind('<Button-3>', self.handle_user_right_click)
 
             btn = tk.Button(new_window, text='Looks Good!', width=20,
                             height=2, bd='1', command=lambda: close_pop_window(new_window))
@@ -126,8 +138,6 @@ class App:
                 canvas.create_image(0, 0, image=self.foto, anchor=tk.NW)
 
                 new_window.lift()  # make the window stay on top
-
-                print("here")
 
                 new_window.after(self.pop_delay, pop_play_video)
 
