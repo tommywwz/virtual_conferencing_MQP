@@ -91,18 +91,26 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
             frame_h, frame_w, frame_c = frame.shape
             # print("DEBUG: size of frame: ", frame_w, 'x', frame_h)
             edge_y = frameClass.edge_y  # extract the edge location on y-axis
-            edge_a, edge_b = frameClass.edge_line  # extract the line equation parameters a, b
-            ratio = fit_h / frame_h  # calculate the ratio of fit shape respect to original shape
-            loc_edge_b = edge_b * ratio  # translate the edge height to current pixel coordinate
-            loc_edge_y = edge_y * ratio
+            if edge_y is None:  # the edge line has not been detected
+                shift_y = 0
+                edge_left = (0, reference_y)
+                edge_right = (fit_w-1, reference_y)
+            else:
+                ratio = fit_h / frame_h  # calculate the ratio of fit shape respect to original shape
+                edge_a, edge_b = frameClass.edge_line  # extract the line equation parameters a, b
 
-            background_y = round(loc_edge_y * bg_h / fit_h - h_margin*0.5)  # transfer the edge location to background coordinate
-            shift_y = background_y - reference_y  # get the distance reference to the background edge line
+                loc_edge_b = edge_b * ratio  # translate the edge height to current pixel coordinate
+                loc_edge_y = edge_y * ratio
+
+                # transfer the edge location to background coordinate
+                background_y = round(loc_edge_y * bg_h / fit_h - h_margin*0.5)  # the y coordinate on the background
+                shift_y = background_y - reference_y  # get the distance reference to the background edge line
+                edge_left = (0, round(loc_edge_b))
+                edge_right = (fit_w - 1, round(edge_a * fit_w + loc_edge_b))
+
             # print("DEBUG: fit of frame: ", fit_w, 'x', fit_h)
             rsz_cam = cv2.resize(frame, (fit_w, fit_h))
             # print("DEBUG: cropped xy: ", rsz_cam.shape)
-            edge_left = (0, round(loc_edge_b))
-            edge_right = (fit_w - 1, round(edge_a * fit_w + loc_edge_b))
 
             lower_left = (0, fit_h - 1)
             lower_right = (fit_w, fit_h - 1)

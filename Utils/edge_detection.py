@@ -146,7 +146,7 @@ class EdgeDetection:
         if self.sample_counter > sample_size:  # when collected enough samples
             filted_edgeLine_obj = self.filter_lines(prefer_point)
 
-            with filted_edgeLine_obj:
+            if filted_edgeLine_obj:
                 a, b = filted_edgeLine_obj.a_b
 
                 cv2.line(line_image, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)

@@ -11,6 +11,7 @@ camDEL_lock = threading.Lock()
 
 
 class CamManagement:
+    # Interact with Frame data structure
     # cam_id = 0
     reference_y = np.floor(Params.BG_DIM[1] * 6 / 7)
 
@@ -20,19 +21,8 @@ class CamManagement:
         # self.edge_lines = {}  # edge equation (a, b) for each cam
         # self.edge_y = {}  # average height of edge for each cam
         self.empty_frame = np.zeros(Params.SHAPE, dtype=np.uint8)
-        self.calib = True
-        self.calibCam = None
-
-    # def open_cam(self, camID=cam_id, if_user=False, if_demo=False):
-    #     cam_name = "Camera %s" % str(camID)
-    #     camThread = CamThread(cam_name, camID, if_user, if_demo)
-    #     camThread.start()
-    #     time.sleep(0.5)
-    #     logging.info("%s: starting", cam_name)
-    #     # self.FRAMES[camID] = self.empty_frame
-    #     # self.edge_lines[camID] = [None, None]
-    #     self.cam_id += 1  # todo camera conflicts need to be fixed here
-    #     return True
+        self.calib = False
+        # self.calibCam = None
 
     def init_cam(self, camID, queue_size=3):
         # initialize a queue for the given camID
