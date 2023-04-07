@@ -15,7 +15,7 @@ class ClientApp:
 
         self.root_window = root_window
         self.root_window.title(windowName)
-        self.root_window.geometry("%dx%d" % (Params.VID_W + 30, Params.VID_H + 30))
+        self.root_window.geometry("%dx%d" % (Params.VID_W + 30, Params.VID_H + 90))
 
         self.canvas = tk.Canvas(root_window, width=Params.VID_W, height=Params.VID_H)
         self.canvas.configure(bg='black')
@@ -46,13 +46,15 @@ class ClientApp:
             self.root_window.mainloop()
 
     def handle_user_right_click(self, event):
-        self.clientVid.mouse_location = None
+        if self.clientVid.calib_flag:
+            self.clientVid.mouse_location = None
 
     def handle_user_left_click(self, event):
-        x = event.x
-        y = event.y
-        self.clientVid.mouse_location = x, y
-        print("Mouse clicked at x =", x, "y =", y)
+        if self.clientVid.calib_flag:
+            x = event.x
+            y = event.y
+            self.clientVid.mouse_location = x, y
+            print("Mouse clicked at x =", x, "y =", y)
 
     def play_selfie_video(self):
         img = self.clientVid.get_Queue()
@@ -86,6 +88,7 @@ class PopupWindow:
         self.ip_entry = tk.Entry(self.ip_window, width=30)
         self.ip_entry.focus_set()
         self.button = tk.Button(self.ip_window, text="Enter", command=self.set_IP)
+        self.ip_window.bind('<Return>', self.on_enter_event)
         self.error_label = tk.Label(self.ip_window, text="Failed to connect", fg="red")
 
         self.ip_entry.pack(side="top", expand=True)
@@ -101,6 +104,9 @@ class PopupWindow:
     def close_all(self):
         self.popup_close()
         self.caller.close(self.root_window)
+
+    def on_enter_event(self, event):
+        self.set_IP()
 
     def set_IP(self):
         self.error_label.pack_forget()

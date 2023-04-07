@@ -72,8 +72,6 @@ class ClientVideo(threading.Thread):
                 success, frame = self.cam.read()
                 if not success: continue
 
-                frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
-
                 if self.calib_flag:
                     # when calibrating, sends blank image to server
                     blank_frame = np.zeros((Params.VID_H, Params.VID_W, 3), dtype=np.uint8)
@@ -85,6 +83,9 @@ class ClientVideo(threading.Thread):
                     self.client_socket.sendall(place_hold_msg)
                     self.do_calibration(frame)
                     continue
+
+                frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
+
 
                 # using the resizing ratio to resize image
                 if self.resize_ratio > 1:
@@ -126,6 +127,11 @@ class ClientVideo(threading.Thread):
         # calculate real edge
         self.edge_line = self.edge_detector.process_frame(frame, sample_size=100, prefer_point=self.mouse_location)
         cv2.circle(frame, self.mouse_location, radius=3, color=(255, 0, 255), thickness=-1)
+        cv2.putText(frame,
+                    text='Calibrating',
+                    org=(Params.VID_W - 120, 20), fontFace=font, fontScale=.7, color=(0, 0, 255),
+                    thickness=1, lineType=linetype, bottomLeftOrigin=False)
+
         cv2.putText(frame,
                     text='Please make sure your hands are below the table',
                     org=(10, Params.VID_H - 10), fontFace=font, fontScale=.4, color=(0, 0, 255),
