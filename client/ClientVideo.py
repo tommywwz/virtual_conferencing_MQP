@@ -11,13 +11,15 @@ from Utils.Frame import Frame
 from Utils.AutoResize import AutoResize
 
 buff_4K = 4 * 1024
-PORT = 9999
-HOST_IP = '192.168.1.3'  # paste your server ip address here
 
 
 class ClientVideo(threading.Thread):
+
     def __init__(self, CamID):
         threading.Thread.__init__(self)
+
+        self.PORT = 9999
+        self.HOST_IP = '192.168.1.3'  # paste your server ip address here
 
         self.CamID = CamID
 
@@ -43,31 +45,25 @@ class ClientVideo(threading.Thread):
         print("HOST NAME: ", camID)
         self.frameClass = Frame(camID)
 
-    def run(self):
+    def set_connection(self, IP, port=9999):
+        self.HOST_IP = IP
+        self.PORT = port
         # create socket
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.client_socket.connect((self.HOST_IP, self.PORT))  # a tuple
+        except socket.error as e:
+            raise e
 
-        # calibration before attempting to connect
+    def run(self):
+
+        # calibration
         while self.cam.isOpened() and self.calib_flag:
             success, frame = self.cam.read()
             self.do_calibration(frame)
 
         if self.exit_flag:
             exit(0)  # exit the thread
-
-        while True:  # check connection here
-            try:
-                self.client_socket.connect((HOST_IP, PORT))  # a tuple
-            except socket.timeout:
-                self.exit_flag = True
-                self.cam.release()
-                self.client_socket.close()
-                print("Connection timed out, host is not running")
-                return
-            except:
-                continue
-            else:
-                break
 
         while True:
             with self.close_lock:
@@ -192,8 +188,10 @@ class ClientVideo(threading.Thread):
         self.exit_flag = True
         self.dump_Queue()
         with self.close_lock:
-            self.cam.release()
-            self.client_socket.close()
+            if self.cam.isOpened():
+                self.cam.release()
+            if self.client_socket is not None:
+                self.client_socket.close()
         print("Backend Thread Exited")
 
 

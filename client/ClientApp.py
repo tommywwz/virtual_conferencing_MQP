@@ -1,3 +1,4 @@
+import socket
 import tkinter as tk
 import sv_ttk
 from Utils import Params
@@ -11,9 +12,6 @@ CamID = 0
 class ClientApp:
     def __init__(self, root_window, windowName):
         self.photo = None
-        # start client video thread
-        self.clientVid = ClientVideo(CamID)
-        self.clientVid.start()
 
         self.root_window = root_window
         self.root_window.title(windowName)
@@ -34,10 +32,18 @@ class ClientApp:
         self.canvas.bind("<Button-1>", self.handle_user_left_click)
         self.canvas.bind('<Button-3>', self.handle_user_right_click)
 
-        self.delay = 15
-        self.play_selfie_video()
+        self.clientVid = ClientVideo(CamID)
 
-        self.root_window.mainloop()
+        self.popup_ip_window = PopupWindow(self)
+        self.popup_ip_window.ip_window.wait_window()
+
+        if self.popup_ip_window.connected:
+            # init client video thread
+            # start client video thread
+            self.clientVid.start()
+            self.play_selfie_video()
+
+            self.root_window.mainloop()
 
     def handle_user_right_click(self, event):
         self.clientVid.mouse_location = None
@@ -55,11 +61,55 @@ class ClientApp:
         self.photo = ImageTk.PhotoImage(image=buff)
         self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
 
-        self.root_window.after(self.delay, self.play_selfie_video)
+        self.root_window.after(15, self.play_selfie_video)
 
     def close(self, window):
-        self.clientVid.close()
+        if self.popup_ip_window.connected:
+            self.clientVid.close()
         window.destroy()
 
 
-ClientApp(tk.Tk(), "Meeting")
+class PopupWindow:
+    def __init__(self, caller):
+        self.connected = False
+        self.caller = caller
+        self.root_window = caller.root_window
+        self.ip_window = tk.Toplevel(self.root_window)
+        self.ip_window.title("Enter IP")
+        self.ip_window.geometry("400x50")
+        self.ip_window.grab_set()
+
+        self.ip_window.attributes('-fullscreen', False)
+        self.ip_window.attributes("-topmost", True)  # <-- Add this line
+        self.ip_window.configure(bg='white')
+
+        self.ip_entry = tk.Entry(self.ip_window, width=30)
+        self.ip_entry.pack()
+        self.ip_entry.focus_set()
+
+        self.button = tk.Button(self.ip_window, text="Enter", command=self.set_IP)
+        self.button.pack()
+        # self.ip_entry.bind('<Return>', self.handle_ip_entry)
+
+        self.ip_window.protocol("WM_DELETE_WINDOW", self.close_all)
+
+    def popup_close(self):
+        self.ip_window.grab_release()
+        self.ip_window.destroy()
+        self.root_window.lift()
+
+    def close_all(self):
+        self.popup_close()
+        self.caller.close(self.root_window)
+
+    def set_IP(self):
+        try:
+            self.caller.clientVid.set_connection(str(self.ip_entry.get()))
+            self.connected = True
+            self.popup_close()
+        except socket.error:
+            print("Error setting IP")
+
+
+if __name__ == '__main__':
+    ClientApp(tk.Tk(), "Meeting")
