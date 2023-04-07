@@ -11,13 +11,15 @@ from Utils.Frame import Frame
 from Utils.AutoResize import AutoResize
 
 buff_4K = 4 * 1024
-PORT = 9999
-HOST_IP = '192.168.1.3'  # paste your server ip address here
 
 
 class ClientVideo(threading.Thread):
+
     def __init__(self, CamID):
         threading.Thread.__init__(self)
+
+        self.PORT = 9999
+        self.HOST_IP = '192.168.1.3'  # paste your server ip address here
 
         self.CamID = CamID
 
@@ -43,11 +45,19 @@ class ClientVideo(threading.Thread):
         print("HOST NAME: ", camID)
         self.frameClass = Frame(camID)
 
-    def run(self):
+    def set_connection(self, IP, port=9999):
+        self.HOST_IP = IP
+        self.PORT = port
         # create socket
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.client_socket.connect((self.HOST_IP, self.PORT))  # a tuple
+        except socket.error as e:
+            raise e
 
-        # calibration before attempting to connect
+    def run(self):
+
+        # calibration
         while self.cam.isOpened() and self.calib_flag:
             success, frame = self.cam.read()
             self.do_calibration(frame)
@@ -55,28 +65,12 @@ class ClientVideo(threading.Thread):
         if self.exit_flag:
             exit(0)  # exit the thread
 
-        while True:  # check connection here
-            try:
-                self.client_socket.connect((HOST_IP, PORT))  # a tuple
-            except socket.timeout:
-                self.exit_flag = True
-                self.cam.release()
-                self.client_socket.close()
-                print("Connection timed out, host is not running")
-                return
-            except:
-                continue
-            else:
-                break
-
         while True:
             with self.close_lock:
                 if self.exit_flag: break
 
                 success, frame = self.cam.read()
                 if not success: continue
-
-                frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
 
                 if self.calib_flag:
                     # when calibrating, sends blank image to server
@@ -89,6 +83,9 @@ class ClientVideo(threading.Thread):
                     self.client_socket.sendall(place_hold_msg)
                     self.do_calibration(frame)
                     continue
+
+                frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
+
 
                 # using the resizing ratio to resize image
                 if self.resize_ratio > 1:
@@ -130,6 +127,11 @@ class ClientVideo(threading.Thread):
         # calculate real edge
         self.edge_line = self.edge_detector.process_frame(frame, sample_size=100, prefer_point=self.mouse_location)
         cv2.circle(frame, self.mouse_location, radius=3, color=(255, 0, 255), thickness=-1)
+        cv2.putText(frame,
+                    text='Calibrating',
+                    org=(Params.VID_W - 120, 20), fontFace=font, fontScale=.7, color=(0, 0, 255),
+                    thickness=1, lineType=linetype, bottomLeftOrigin=False)
+
         cv2.putText(frame,
                     text='Please make sure your hands are below the table',
                     org=(10, Params.VID_H - 10), fontFace=font, fontScale=.4, color=(0, 0, 255),
@@ -192,8 +194,10 @@ class ClientVideo(threading.Thread):
         self.exit_flag = True
         self.dump_Queue()
         with self.close_lock:
-            self.cam.release()
-            self.client_socket.close()
+            if self.cam.isOpened():
+                self.cam.release()
+            if self.client_socket is not None:
+                self.client_socket.close()
         print("Backend Thread Exited")
 
 
