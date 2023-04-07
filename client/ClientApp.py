@@ -76,20 +76,20 @@ class PopupWindow:
         self.root_window = caller.root_window
         self.ip_window = tk.Toplevel(self.root_window)
         self.ip_window.title("Enter IP")
-        self.ip_window.geometry("400x50")
+        self.ip_window.geometry("400x100")
         self.ip_window.grab_set()
 
         self.ip_window.attributes('-fullscreen', False)
         self.ip_window.attributes("-topmost", True)  # <-- Add this line
-        self.ip_window.configure(bg='white')
+        # self.ip_window.configure(bg='white')
 
         self.ip_entry = tk.Entry(self.ip_window, width=30)
-        self.ip_entry.pack()
         self.ip_entry.focus_set()
-
         self.button = tk.Button(self.ip_window, text="Enter", command=self.set_IP)
-        self.button.pack()
-        # self.ip_entry.bind('<Return>', self.handle_ip_entry)
+        self.error_label = tk.Label(self.ip_window, text="Failed to connect", fg="red")
+
+        self.ip_entry.pack(side="top", expand=True)
+        self.button.pack(side="top", expand=True)
 
         self.ip_window.protocol("WM_DELETE_WINDOW", self.close_all)
 
@@ -103,12 +103,14 @@ class PopupWindow:
         self.caller.close(self.root_window)
 
     def set_IP(self):
+        self.error_label.pack_forget()
         try:
             self.caller.clientVid.set_connection(str(self.ip_entry.get()))
             self.connected = True
             self.popup_close()
-        except socket.error:
-            print("Error setting IP")
+        except socket.error as e:
+            self.error_label.pack(side="top", expand=True)
+            print("Error setting IP: ", e)
 
 
 if __name__ == '__main__':
