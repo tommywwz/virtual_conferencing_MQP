@@ -1,18 +1,18 @@
 import tkinter as tk
 import sv_ttk
 from Utils import Params
-import ClientVideo
+from ClientVideo import ClientVideo
 from PIL import Image, ImageTk
 import cv2
 
-CamID = 3
+CamID = 0
 
 
 class ClientApp:
     def __init__(self, root_window, windowName):
         self.photo = None
         # start client video thread
-        self.clientVid = ClientVideo.ClientVideo(CamID)
+        self.clientVid = ClientVideo(CamID)
         self.clientVid.start()
 
         self.root_window = root_window
@@ -31,10 +31,22 @@ class ClientApp:
 
         sv_ttk.set_theme('dark')  # setting up svttk theme
 
+        self.canvas.bind("<Button-1>", self.handle_user_left_click)
+        self.canvas.bind('<Button-3>', self.handle_user_right_click)
+
         self.delay = 15
         self.play_selfie_video()
 
         self.root_window.mainloop()
+
+    def handle_user_right_click(self, event):
+        self.clientVid.mouse_location = None
+
+    def handle_user_left_click(self, event):
+        x = event.x
+        y = event.y
+        self.clientVid.mouse_location = x, y
+        print("Mouse clicked at x =", x, "y =", y)
 
     def play_selfie_video(self):
         img = self.clientVid.get_Queue()
