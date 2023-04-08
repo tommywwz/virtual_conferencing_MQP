@@ -22,7 +22,7 @@ class ClientApp:
         self.canvas.place(relx=0.5, rely=0.5, anchor='center')
 
         self.calib_btn = tk.Button(self.root_window, text='Calibrate my camera', width=20,
-                                   height=2, command=lambda: self.clientVid.toggle_calib())
+                                   height=2, command=self.calib_cam)
         self.calib_btn.pack()
 
         self.root_window.protocol("WM_DELETE_WINDOW", lambda: self.close(self.root_window))
@@ -32,12 +32,20 @@ class ClientApp:
         self.canvas.bind("<Button-1>", self.handle_user_left_click)
         self.canvas.bind('<Button-3>', self.handle_user_right_click)
 
-        self.clientVid = ClientVideo(CamID)
+        self.cam_id_entry = tk.Entry(self.root_window, width=10)
+        self.cam_id_select_btn = tk.Button(self.root_window, text='Select Camera', width=20,
+                                           height=2, command=self.config_cam)
+        self.cam_id_entry.pack(side="bottom")
+        self.cam_id_select_btn.pack(side="bottom")
+
+        self.clientVid = ClientVideo()
 
         self.popup_ip_window = PopupWindow(self)
         self.popup_ip_window.ip_window.wait_window()
 
         if self.popup_ip_window.connected:
+            # if the popup closed when connection was established
+
             # init client video thread
             # start client video thread
             self.clientVid.start()
@@ -55,6 +63,27 @@ class ClientApp:
             y = event.y
             self.clientVid.mouse_location = x, y
             print("Mouse clicked at x =", x, "y =", y)
+
+    def calib_cam(self):
+        if self.clientVid.calib_flag:  # if switch from calib to normal
+            self.cam_id_entry.pack_forget()
+            self.cam_id_select_btn.pack_forget()
+        else:  # if switch from normal to calib
+            self.cam_id_entry.pack(side="bottom")
+            self.cam_id_select_btn.pack(side="bottom")
+        self.clientVid.toggle_calib()
+
+    def config_cam(self):
+        text = self.cam_id_entry.get()
+        try:
+            cam_id = int(text)
+        except ValueError:
+            print("Invalid camera id")
+            return
+        try:
+            self.clientVid.set_cam(cam_id)
+        except IOError as e:
+            print("Error setting camera: ", e)
 
     def play_selfie_video(self):
         img = self.clientVid.get_Queue()
@@ -110,8 +139,11 @@ class PopupWindow:
 
     def set_IP(self):
         self.error_label.pack_forget()
+        ip = str(self.ip_entry.get())
+        if ip == "":
+            return
         try:
-            self.caller.clientVid.set_connection(str(self.ip_entry.get()))
+            self.caller.clientVid.set_connection(ip)
             self.connected = True
             self.popup_close()
         except socket.error as e:

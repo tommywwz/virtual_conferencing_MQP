@@ -13,15 +13,34 @@ from Utils.AutoResize import AutoResize
 buff_4K = 4 * 1024
 
 
+def gen_fake_frame():
+    blank_frame = np.zeros((Params.VID_H, Params.VID_W, 3), dtype=np.uint8)
+    fake_edge = (0, 0)
+    return blank_frame, fake_edge
+
+
+def put_text_on_center(frame, text, color=(0, 0, 255), font_scale=1, thickness=2):
+    text_size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+    text_w, text_h = text_size
+    frame_h, frame_w = frame.shape[:2]
+    cv2.putText(frame, text, (int((frame_w - text_w) / 2), int((frame_h - text_h) / 2)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness)
+    # cv2.putText(frame,
+    #             text='Calibrating',
+    #             org=int((frame_w - text_w) / 2), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=font_scale, color=color,
+    #             thickness=1, lineType=cv2.LINE_AA, bottomLeftOrigin=False)
+    return frame
+
+
 class ClientVideo(threading.Thread):
 
-    def __init__(self, CamID):
+    def __init__(self):
         threading.Thread.__init__(self)
 
         self.PORT = 9999
         self.HOST_IP = '192.168.1.3'  # paste your server ip address here
 
-        self.CamID = CamID
+        self.cam = None
+        self.set_cam(0)
 
         self.close_lock = threading.Lock()
         self.calib_flag = True
@@ -37,13 +56,19 @@ class ClientVideo(threading.Thread):
         self.edge_detector = edge_detection.EdgeDetection()
         self.client_auto_resize = AutoResize()
 
-        self.cam = cv2.VideoCapture(self.CamID, cv2.CAP_DSHOW)
+        client_id = socket.gethostbyname(socket.gethostname())
+        print("HOST NAME: ", client_id)
+        self.frameClass = Frame(client_id)
+
+    def set_cam(self, camID):
+        self.cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
         self.cam.set(3, Params.RAW_CAM_W)  # width
         self.cam.set(4, Params.RAW_CAM_H)  # height
-
-        camID = socket.gethostbyname(socket.gethostname())
-        print("HOST NAME: ", camID)
-        self.frameClass = Frame(camID)
+        # check if the camera is opened
+        if not self.cam.isOpened():
+            raise IOError("Cannot open webcam")
+        else:
+            pass
 
     def set_connection(self, IP, port=9999):
         self.HOST_IP = IP
@@ -56,12 +81,6 @@ class ClientVideo(threading.Thread):
             raise e
 
     def run(self):
-
-        # calibration
-        while self.cam.isOpened() and self.calib_flag:
-            success, frame = self.cam.read()
-            self.do_calibration(frame)
-
         if self.exit_flag:
             exit(0)  # exit the thread
 
@@ -69,23 +88,29 @@ class ClientVideo(threading.Thread):
             with self.close_lock:
                 if self.exit_flag: break
 
-                success, frame = self.cam.read()
-                if not success: continue
+                if self.cam.isOpened():
+                    _, frame = self.cam.read()
+                else:
+                    frame, _ = gen_fake_frame()
+                    frame = put_text_on_center(frame, "Camera not found", color=(0, 0, 255), font_scale=1, thickness=2)
+                    self.Q_selfie.put(frame)
+                    continue
+
 
                 if self.calib_flag:
-                    # when calibrating, sends blank image to server
-                    blank_frame = np.zeros((Params.VID_H, Params.VID_W, 3), dtype=np.uint8)
-                    fake_edge = (0, 0)
-                    self.frameClass.updateFrame(image=blank_frame, edge_line=fake_edge)
-                    pickled_frame = pickle.dumps(self.frameClass)
-                    # data length followed by serialized frame object
-                    place_hold_msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
-                    self.client_socket.sendall(place_hold_msg)
                     self.do_calibration(frame)
+                    if self.client_socket is not None:
+                        # when calibrating, sends blank image to server
+                        blank_screen_for_server, fake_edge = gen_fake_frame()
+                        blank_screen_for_server = put_text_on_center(blank_screen_for_server, "Calibrating...", color=(0, 0, 255), font_scale=3)
+                        self.frameClass.updateFrame(image=blank_screen_for_server, edge_line=fake_edge)
+                        pickled_frame = pickle.dumps(self.frameClass)
+                        # data length followed by serialized frame object
+                        place_hold_msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
+                        self.client_socket.sendall(place_hold_msg)
                     continue
 
                 frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
-
 
                 # using the resizing ratio to resize image
                 if self.resize_ratio > 1:
@@ -202,8 +227,7 @@ class ClientVideo(threading.Thread):
 
 
 if __name__ == "__main__":
-    camid = 1
-    thread0 = ClientVideo(camid)
+    thread0 = ClientVideo()
     # thread1 = threading.Thread(target=audio_stream)
     thread0.start()
     # thread1.start()
