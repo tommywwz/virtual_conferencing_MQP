@@ -23,7 +23,8 @@ def put_text_on_center(frame, text, color=(0, 0, 255), font_scale=1, thickness=2
     text_size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
     text_w, text_h = text_size
     frame_h, frame_w = frame.shape[:2]
-    cv2.putText(frame, text, (int((frame_w - text_w) / 2), int((frame_h - text_h) / 2)), cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness)
+    cv2.putText(frame, text, (int((frame_w - text_w) / 2), int((frame_h - text_h) / 2)), cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale, color, thickness)
     # cv2.putText(frame,
     #             text='Calibrating',
     #             org=int((frame_w - text_w) / 2), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=font_scale, color=color,
@@ -96,13 +97,13 @@ class ClientVideo(threading.Thread):
                     self.Q_selfie.put(frame)
                     continue
 
-
                 if self.calib_flag:
                     self.do_calibration(frame)
                     if self.client_socket is not None:
                         # when calibrating, sends blank image to server
                         blank_screen_for_server, fake_edge = gen_fake_frame()
-                        blank_screen_for_server = put_text_on_center(blank_screen_for_server, "Calibrating...", color=(0, 0, 255), font_scale=3)
+                        blank_screen_for_server = put_text_on_center(blank_screen_for_server, "Calibrating...",
+                                                                     color=(0, 0, 255), font_scale=3)
                         self.frameClass.updateFrame(image=blank_screen_for_server, edge_line=fake_edge)
                         pickled_frame = pickle.dumps(self.frameClass)
                         # data length followed by serialized frame object
