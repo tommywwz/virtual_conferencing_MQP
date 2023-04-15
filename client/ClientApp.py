@@ -21,7 +21,9 @@ class ClientApp:
         self.canvas.configure(bg='black')
         self.canvas.place(relx=0.5, rely=0.5, anchor='center')
 
-        self.calib_btn = tk.Button(self.root_window, text='Calibrate my camera', width=20,
+        self.calib_text = tk.StringVar()
+        self.calib_text.set("Calibrate my camera")
+        self.calib_btn = tk.Button(self.root_window, textvariable=self.calib_text, width=20,
                                    height=2, command=self.calib_cam)
         self.calib_btn.pack()
 
@@ -30,7 +32,7 @@ class ClientApp:
         sv_ttk.set_theme('dark')  # setting up svttk theme
 
         self.canvas.bind("<Button-1>", self.handle_user_left_click)
-        self.canvas.bind('<Button-3>', self.handle_user_right_click)
+        self.canvas.bind("<Button-3>", self.handle_user_right_click)
 
         self.cam_id_entry = tk.Entry(self.root_window, width=10)
         self.cam_id_select_btn = tk.Button(self.root_window, text='Select Camera', width=20,
@@ -38,7 +40,7 @@ class ClientApp:
         self.cam_id_entry.pack(side="bottom")
         self.cam_id_select_btn.pack(side="bottom")
 
-        self.clientVid = ClientVideo()
+        self.thread_clientVid = ClientVideo()
 
         self.popup_ip_window = PopupWindow(self)
         self.popup_ip_window.ip_window.wait_window()
@@ -46,32 +48,35 @@ class ClientApp:
         if self.popup_ip_window.connected:
             # if the popup closed when connection was established
 
-            # init client video thread
             # start client video thread
-            self.clientVid.start()
+            self.thread_clientVid.setDaemon(True)
+            self.thread_clientVid.start()
+
             self.play_selfie_video()
 
             self.root_window.mainloop()
 
     def handle_user_right_click(self, event):
-        if self.clientVid.calib_flag:
-            self.clientVid.mouse_location = None
+        if self.thread_clientVid.calib_flag:
+            self.thread_clientVid.mouse_location = None
 
     def handle_user_left_click(self, event):
-        if self.clientVid.calib_flag:
+        if self.thread_clientVid.calib_flag:
             x = event.x
             y = event.y
-            self.clientVid.mouse_location = x, y
+            self.thread_clientVid.mouse_location = x, y
             print("Mouse clicked at x =", x, "y =", y)
 
     def calib_cam(self):
-        if self.clientVid.calib_flag:  # if switch from calib to normal
+        if self.thread_clientVid.calib_flag:  # if switch from calib to normal
             self.cam_id_entry.pack_forget()
             self.cam_id_select_btn.pack_forget()
+            self.calib_text.set("Calibrate my camera")
         else:  # if switch from normal to calib
             self.cam_id_entry.pack(side="bottom")
             self.cam_id_select_btn.pack(side="bottom")
-        self.clientVid.toggle_calib()
+            self.calib_text.set("Finish calibration")
+        self.thread_clientVid.toggle_calib()
 
     def config_cam(self):
         text = self.cam_id_entry.get()
@@ -81,12 +86,12 @@ class ClientApp:
             print("Invalid camera id")
             return
         try:
-            self.clientVid.set_cam(cam_id)
+            self.thread_clientVid.set_cam(cam_id)
         except IOError as e:
             print("Error setting camera: ", e)
 
     def play_selfie_video(self):
-        img = self.clientVid.get_Queue()
+        img = self.thread_clientVid.get_Queue()
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         buff = Image.fromarray(img)
         self.photo = ImageTk.PhotoImage(image=buff)
@@ -95,8 +100,9 @@ class ClientApp:
         self.root_window.after(15, self.play_selfie_video)
 
     def close(self, window):
-        if self.popup_ip_window.connected:
-            self.clientVid.close()
+        if self.thread_clientVid.is_alive():
+            # check if the thread_clientVid is run yet
+            self.thread_clientVid.close()
         window.destroy()
 
 
@@ -143,7 +149,7 @@ class PopupWindow:
         if ip == "":
             return
         try:
-            self.caller.clientVid.set_connection(ip)
+            self.caller.thread_clientVid.set_connection(ip)
             self.connected = True
             self.popup_close()
         except socket.error as e:

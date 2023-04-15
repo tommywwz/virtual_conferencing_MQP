@@ -44,13 +44,15 @@ class ClientVideo(threading.Thread):
         self.set_cam(0)
 
         self.close_lock = threading.Lock()
-        self.calib_flag = True
+        self.calib_flag = False
         self.exit_flag = False
         self.client_socket = None
         self.Q_selfie = queue.Queue(maxsize=3)
         self.edge_line = (0, 0)
         self.resize_ratio = 1
         self.new_shape = (Params.VID_W, Params.VID_H)
+
+        self.server_down = threading.Event()
 
         self.mouse_location = None  # location of user mouse click
 
@@ -91,29 +93,37 @@ class ClientVideo(threading.Thread):
 
                 if self.cam.isOpened():
                     _, frame = self.cam.read()
+                    frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
                 else:
                     frame, _ = gen_fake_frame()
                     frame = put_text_on_center(frame, "Camera not found", color=(0, 0, 255), font_scale=1, thickness=2)
                     self.Q_selfie.put(frame)
                     continue
 
-                if self.calib_flag:
-                    self.do_calibration(frame)
-                    if self.client_socket is not None:
-                        # when calibrating, sends blank image to server
-                        blank_screen_for_server, fake_edge = gen_fake_frame()
-                        blank_screen_for_server = put_text_on_center(blank_screen_for_server, "Calibrating...",
-                                                                     color=(0, 0, 255), font_scale=3)
-                        self.frameClass.updateFrame(image=blank_screen_for_server, edge_line=fake_edge)
-                        pickled_frame = pickle.dumps(self.frameClass)
-                        # data length followed by serialized frame object
-                        place_hold_msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
-                        self.client_socket.sendall(place_hold_msg)
+                if self.client_socket is None:
+                    self.Q_selfie.put(frame)
                     continue
 
-                frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
+                if self.calib_flag:
+                    self.do_calibration(frame)
+                    # when calibrating, sends blank image to server
+                    blank_screen_for_server, fake_edge = gen_fake_frame()
+                    blank_screen_for_server = put_text_on_center(blank_screen_for_server, "Calibrating...",
+                                                                 color=(0, 0, 255), font_scale=3)
+                    self.frameClass.updateFrame(image=blank_screen_for_server, edge_line=fake_edge)
+                    pickled_frame = pickle.dumps(self.frameClass)
+                    # data length followed by serialized frame object
+                    place_hold_msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
+                    try:
+                        self.client_socket.sendall(place_hold_msg)
+                    except ConnectionResetError as e:
+                        print("Server is closed: ", e)
+                        self.calib_flag = False
+                        self.server_down.set()
+                        self.client_socket = None
+                    continue
 
-                # using the resizing ratio to resize image
+                # -------------using the resizing ratio to resize image----------------
                 if self.resize_ratio > 1:
                     # if head is smaller than reference, the photo need to be enlarged
                     rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_LINEAR)
@@ -128,7 +138,7 @@ class ClientVideo(threading.Thread):
                     # if head is bigger than reference, the photo need to be shrunk
                     rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_AREA)
                     # gets a smaller image here
-                # end of image resizing
+                # -------------end of image resizing----------------
 
                 self.frameClass.updateFrame(image=rsz_image, edge_line=self.edge_line)  # update edge information
 
@@ -136,12 +146,17 @@ class ClientVideo(threading.Thread):
 
                 # data length followed by serialized frame object
                 msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
-                self.client_socket.sendall(msg)
+                try:
+                    self.client_socket.sendall(msg)
+                except ConnectionResetError as e:
+                    print("Server is closed: ", e)
+                    self.server_down.set()
+                    self.client_socket = None
 
                 self.Q_selfie.put(frame)
 
     def do_calibration(self, frame):
-        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         font = cv2.FONT_HERSHEY_SIMPLEX
         linetype = cv2.LINE_AA
         # calculate the resizing ratio
