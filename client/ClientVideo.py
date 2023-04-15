@@ -44,14 +44,14 @@ class ClientVideo(threading.Thread):
         self.set_cam(0)
 
         self.close_lock = threading.Lock()
-        self.calib_flag = False
-        self.exit_flag = False
         self.client_socket = None
         self.Q_selfie = queue.Queue(maxsize=3)
         self.edge_line = (0, 0)
         self.resize_ratio = 1
         self.new_shape = (Params.VID_W, Params.VID_H)
 
+        self.calib_flag = False
+        self.exit_flag = False
         self.server_down = threading.Event()
 
         self.mouse_location = None  # location of user mouse click
@@ -115,30 +115,14 @@ class ClientVideo(threading.Thread):
                     # data length followed by serialized frame object
                     place_hold_msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
                     try:
-                        self.client_socket.sendall(place_hold_msg)
-                    except ConnectionResetError as e:
-                        print("Server is closed: ", e)
+                        self.send_msg(place_hold_msg)
+                    except ConnectionResetError or ConnectionError as e:
+                        print(e)
                         self.calib_flag = False
-                        self.server_down.set()
-                        self.client_socket = None
                     continue
 
-                # -------------using the resizing ratio to resize image----------------
-                if self.resize_ratio > 1:
-                    # if head is smaller than reference, the photo need to be enlarged
-                    rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_LINEAR)
-                    ah, aw = rsz_image.shape[:2]
-                    dn = round((ah + Params.VID_H) * 0.5)
-                    up = round((ah - Params.VID_H) * 0.5)
-                    lt = round((aw - Params.VID_W) * 0.5)
-                    rt = round((aw + Params.VID_W) * 0.5)
-                    rsz_image = rsz_image[up:dn, lt:rt]
-                    # gets an image the same as the standard shape
-                else:
-                    # if head is bigger than reference, the photo need to be shrunk
-                    rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_AREA)
-                    # gets a smaller image here
-                # -------------end of image resizing----------------
+                rsz_image = self.do_resize(frame)
+                self.Q_selfie.put(frame)
 
                 self.frameClass.updateFrame(image=rsz_image, edge_line=self.edge_line)  # update edge information
 
@@ -147,13 +131,38 @@ class ClientVideo(threading.Thread):
                 # data length followed by serialized frame object
                 msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
                 try:
-                    self.client_socket.sendall(msg)
-                except ConnectionResetError as e:
-                    print("Server is closed: ", e)
-                    self.server_down.set()
-                    self.client_socket = None
+                    self.send_msg(msg)
+                except ConnectionResetError or ConnectionError as e:
+                    print(e)
 
-                self.Q_selfie.put(frame)
+    def send_msg(self, msg):
+        if self.client_socket is None:
+            raise ConnectionError("Client socket is None")
+        try:
+            self.client_socket.sendall(msg)
+        except ConnectionResetError as e:
+            self.server_down.set()
+            self.client_socket = None
+            raise e
+
+    def do_resize(self, frame):
+        # -------------using the resizing ratio to resize image----------------
+        if self.resize_ratio > 1:
+            # if head is smaller than reference, the photo need to be enlarged
+            rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_LINEAR)
+            ah, aw = rsz_image.shape[:2]
+            dn = round((ah + Params.VID_H) * 0.5)
+            up = round((ah - Params.VID_H) * 0.5)
+            lt = round((aw - Params.VID_W) * 0.5)
+            rt = round((aw + Params.VID_W) * 0.5)
+            rsz_image = rsz_image[up:dn, lt:rt]
+            # gets an image the same as the standard shape
+        else:
+            # if head is bigger than reference, the photo need to be shrunk
+            rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_AREA)
+            # gets a smaller image here
+        # -------------end of image resizing----------------
+        return rsz_image
 
     def do_calibration(self, frame):
         # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
