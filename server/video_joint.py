@@ -305,10 +305,10 @@ class VideoInterface:
             if not frame_dict:
                 continue  # if frame dictionary is empty, continue
             user_feed = frame_dict[userCam].img
-            if self.calib:
+            if self.CamMan.calib:
                 camThread.mouse_location = self.mouse_location_FE
-                CamMan.calib = True
                 self.Q_userFrame.put(user_feed)
+                print("putQ")
 
             frame_dict.pop(userCam, None)  # user camera won't be displayed
 
@@ -322,6 +322,7 @@ class VideoInterface:
             imgBG_output = ht.HeadTacker(cv2.flip(user_feed, 1), imgStacked, hist=10)
             a_rsz.check_bound(user_feed, imgBG_output)
             self.Q_FrameForDisplay.put(imgBG_output)
+            # print("put")
 
         print(Params.OKGREEN + "Closing Cam Control Thread" + Params.ENDC)
         CamMan.set_Term(True)  # inform each camera threads to terminate
@@ -332,25 +333,24 @@ class VideoInterface:
         self.Term = True
 
         print("!!Dumping main window queue!!")
-        if not self.Q_FrameForDisplay.empty():
-            while not self.Q_FrameForDisplay.empty():
-                item = self.Q_FrameForDisplay.get()
-                print("dequeued one item")
-        else:
-            print("The queue is empty.")
+        while not self.Q_FrameForDisplay.empty():
+            item = self.Q_FrameForDisplay.get()
+            print("dequeued one item")
+
+        print("The main window queue is empty.")
 
         print("!!Dumping selfie queue!!")
-        if not self.Q_userFrame.empty():
-            while not self.Q_userFrame.empty():
-                item = self.Q_userFrame.get()
-                print("dequeued one item")
-        else:
-            print("The queue is empty.")
 
-        for thread in threading.enumerate():
-            if thread is not threading.currentThread():
-                thread.join()
-                print("Joined Thread")
+        while not self.Q_userFrame.empty():
+            item = self.Q_userFrame.get()
+            print("dequeued one item")
+
+        print("The selfie queue is empty.")
+
+        # for thread in threading.enumerate():
+        #     if thread is not threading.currentThread():
+        #         thread.join()
+        #         print("Joined Thread")
 
 
 # VJ = VideoJoint()
