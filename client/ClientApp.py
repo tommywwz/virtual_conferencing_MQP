@@ -97,7 +97,7 @@ class ClientApp:
         self.photo = ImageTk.PhotoImage(image=buff)
         self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
 
-        self.root_window.after(15, self.play_selfie_video)
+        self.root_window.after(10, self.play_selfie_video)
 
     def close(self, window):
         if self.thread_clientVid.is_alive():

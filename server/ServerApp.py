@@ -34,8 +34,8 @@ class App:
         self.canvas.configure(bg='black')
         self.canvas.place(relx=0.5, rely=0.5, anchor='center')
 
-        self.VI = video_joint.VideoInterface()
-        self.VI.run()
+        self.VJ = video_joint.VideoJoint()
+        self.VJ.run()
 
         # self.show_vid()
 
@@ -62,7 +62,7 @@ class App:
     def root_play_video(self):
         start_time = time.time()
 
-        frame = self.VI.Q_FrameForDisplay.get()
+        frame = self.VJ.Q_FrameForDisplay.get()
 
         if self.calib_window_closed:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -84,7 +84,7 @@ class App:
         self.root_window.after(self.main_delay, self.root_play_video)
 
     def close_main_window(self, window):
-        self.VI.stop()
+        self.VJ.stop()
         window.destroy()
 
     def start_popup_window(self):
@@ -101,18 +101,25 @@ class PopUpWindow(threading.Thread):
         self.new_window.title("Calibration")
 
         self.root.calib_window_closed = False
-        self.root.VI.CamMan.calib = True
+        self.root.VJ.CamMan.calib = True
 
         self.canvas = tk.Canvas(self.new_window, width=Params.VID_W,
                                 height=Params.VID_H)
-        self.canvas.pack()
 
         self.canvas.bind("<Button-1>", self.handle_user_left_click)
         self.canvas.bind('<Button-3>', self.handle_user_right_click)
 
         self.btn = tk.Button(self.new_window, text='Looks Good!', width=20,
                              height=2, bd='1', command=lambda: self.close_pop_window())
+
+        self.cam_entry = tk.Entry(self.new_window, width=20)
+        self.cam_select_btn = tk.Button(self.new_window, text='Select Camera', width=20,
+                                        height=2, bd='1', command=lambda: self.select_camera())
+
+        self.canvas.pack()
         self.btn.pack()
+        self.cam_entry.pack()
+        self.cam_select_btn.pack()
 
         # setup closing protocol
         self.new_window.protocol("WM_DELETE_WINDOW", lambda: self.close_pop_window())
@@ -122,18 +129,25 @@ class PopUpWindow(threading.Thread):
         self.play_video()
 
     def handle_user_right_click(self, event):
-        self.root.VI.mouse_location_FE = None
+        self.root.VJ.mouse_location_FE = None
 
     def handle_user_left_click(self, event):
         x = event.x
         y = event.y
-        self.root.VI.mouse_location_FE = x, y
+        self.root.VJ.mouse_location_FE = x, y
         print("Mouse clicked at x =", x, "y =", y)
+
+    def select_camera(self):
+        cam_id = self.cam_entry.get()
+        if cam_id.isdigit():
+            self.root.VJ.update_user_cam_FE(int(cam_id))
+            print("Camera selected: ", cam_id)
+        else:
+            print("Camera selection failed. Please enter a number.")
 
     def play_video(self):
 
-        frame = self.root.VI.Q_userFrame.get()
-        print("getQ")
+        frame = self.root.VJ.Q_userFrame.get()
 
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame = cv2.resize(frame, (Params.VID_W, Params.VID_H))
@@ -147,9 +161,9 @@ class PopUpWindow(threading.Thread):
         # set the flag to indicate that the window has been closed
         self.root.calib_window_closed = True
         print("-----------exiting calibration window------------")
-        while not self.root.VI.Q_userFrame.empty():
-            item = self.root.VI.Q_userFrame.get()
-        self.root.VI.CamMan.calib = False
+        while not self.root.VJ.Q_userFrame.empty():
+            item = self.root.VJ.Q_userFrame.get()
+        self.root.VJ.CamMan.calib = False
         self.new_window.destroy()
 
 

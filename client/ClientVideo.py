@@ -32,6 +32,9 @@ def put_text_on_center(frame, text, color=(0, 0, 255), font_scale=1, thickness=2
     return frame
 
 
+cam_mutex = threading.Lock()
+
+
 class ClientVideo(threading.Thread):
 
     def __init__(self):
@@ -41,7 +44,8 @@ class ClientVideo(threading.Thread):
         self.HOST_IP = '192.168.1.3'  # paste your server ip address here
 
         self.cam = None
-        self.set_cam(0)
+        self.old_cam_id = 0
+        self.set_cam(self.old_cam_id)
 
         self.close_lock = threading.Lock()
         self.client_socket = None
@@ -64,14 +68,18 @@ class ClientVideo(threading.Thread):
         self.frameClass = Frame(client_id)
 
     def set_cam(self, camID):
-        self.cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
-        self.cam.set(3, Params.RAW_CAM_W)  # width
-        self.cam.set(4, Params.RAW_CAM_H)  # height
-        # check if the camera is opened
-        if not self.cam.isOpened():
-            raise IOError("Cannot open webcam")
-        else:
-            pass
+        with cam_mutex:
+            if self.cam is not None and camID == self.old_cam_id:
+                return
+            self.cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
+            self.cam.set(3, Params.RAW_CAM_W)  # width
+            self.cam.set(4, Params.RAW_CAM_H)  # height
+            self.old_cam_id = camID
+            # check if the camera is opened
+            if not self.cam.isOpened():
+                raise IOError("Cannot open webcam")
+            else:
+                pass
 
     def set_connection(self, IP, port=9999):
         self.HOST_IP = IP
@@ -92,7 +100,8 @@ class ClientVideo(threading.Thread):
                 if self.exit_flag: break
 
                 if self.cam.isOpened():
-                    _, frame = self.cam.read()
+                    with cam_mutex:
+                        _, frame = self.cam.read()
                     frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
                 else:
                     frame, _ = gen_fake_frame()
