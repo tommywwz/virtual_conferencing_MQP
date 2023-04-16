@@ -26,6 +26,7 @@ class VideoServer:
                 print(f"Accepted connection from {address}")
                 client_socket.setblocking(True)  # set blocking back on
                 client_thread = threading.Thread(target=self.clientThread, args=(client_socket, address, ))
+                client_thread.setDaemon(True)
                 client_thread.start()
             except BlockingIOError:
                 time.sleep(0.5)
@@ -51,7 +52,9 @@ class VideoServer:
                 print(Params.WARNING + str(client_addr) + ": abruptly exit" + Params.ENDC)
                 break
 
+            flag_client_forcibly_closed = False
             while len(data) < payload_size:
+
                 try:
                     packet = client_socket.recv(Params.buff_4K)  # 4K
                     if not packet:
@@ -62,10 +65,11 @@ class VideoServer:
                         print(Params.WARNING + str(client_addr) + ": connection was forcibly closed by the remote host"
                               + Params.ENDC)
                         inputs.remove(client_socket)
-                        self.exit_event.set()
+                        flag_client_forcibly_closed = True
                         break
 
-            if self.exit_event.is_set():
+            if flag_client_forcibly_closed or self.exit_event.is_set():
+                # if client forcibly closed the connection or server is shutting down
                 break
 
             packed_msg_size = data[:payload_size]  # extracting the packet size information

@@ -266,10 +266,12 @@ class VideoInterface:
 
     def run(self):
         server_thread = threading.Thread(target=self.server.start, args=())
+        server_thread.setDaemon(True)
         server_thread.start()
         logging.info("Socket Acceptor Started!")
 
         thread0 = threading.Thread(target=self.ctlThread, args=())
+        thread0.setDaemon(True)
         thread0.start()
         logging.info("Control Thread Started!")
         # thread_non_block = threading.Thread(target=self.client_acceptor, args=(Params.HOST_IP, Params.PORT))

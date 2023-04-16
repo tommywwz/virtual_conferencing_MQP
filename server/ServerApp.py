@@ -150,4 +150,5 @@ class App:
                 window.destroy()
 
 
-App(tk.Tk(), "Meeting")
+if __name__ == '__main__':
+    App(tk.Tk(), "Meeting")
