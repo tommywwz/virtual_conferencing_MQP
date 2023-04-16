@@ -119,6 +119,7 @@ class ClientVideo(threading.Thread):
                     except ConnectionResetError or ConnectionError as e:
                         print(e)
                         self.calib_flag = False
+                        continue
                     continue
 
                 rsz_image = self.do_resize(frame)
@@ -134,6 +135,7 @@ class ClientVideo(threading.Thread):
                     self.send_msg(msg)
                 except ConnectionResetError or ConnectionError as e:
                     print(e)
+                    continue
 
     def send_msg(self, msg):
         if self.client_socket is None:
