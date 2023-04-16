@@ -347,10 +347,12 @@ class VideoInterface:
 
         print("The selfie queue is empty.")
 
-        # for thread in threading.enumerate():
-        #     if thread is not threading.currentThread():
-        #         thread.join()
-        #         print("Joined Thread")
+        for thread in threading.enumerate():
+            if thread is not threading.currentThread():
+                if thread.is_alive():
+                    print("Joining Thread: ", thread)
+                    thread.join()
+                    print(thread, " Joined")
 
 
 # VJ = VideoJoint()
