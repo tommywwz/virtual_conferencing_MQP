@@ -7,16 +7,24 @@ import time
 class VideoServer:
     def __init__(self, host_ip, port, CamMan):
         self.server_socket = None
-        self.host_ip = host_ip
         self.port = port
         self.CamMan = CamMan
         self.exit_event = threading.Event()
+        # create an datagram socket (single UDP request and response, then close)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # connect to an address on the internet, that's likely to always be up
+        # (the Google primary DNS is a good bet)
+        sock.connect(("8.8.8.8", 80))
+        # after connecting, the socket will have the IP in its address
+        self.host_ip = sock.getsockname()[0]
+        print("Your Computer IP Address is: " + self.host_ip)
+        # done
+        sock.close()
 
     def start(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket_addr = (self.host_ip, self.port)
         self.server_socket.bind(server_socket_addr)
-        print('host ip: ' + self.host_ip)
         self.server_socket.setblocking(False)  # set to non-blocking accept
         self.server_socket.listen(5)
 
