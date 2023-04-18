@@ -10,7 +10,7 @@ from Utils import edge_detection, HeadTrack, Params, CamManagement
 from Utils import bg_remove_mp as bgmp
 from Utils.AutoResize import AutoResize
 from Utils.Frame import Frame
-import video_server
+from server import video_server
 
 SERVER_CAM_ID = 0
 
@@ -373,46 +373,5 @@ class VideoJoint:
             if thread is not threading.currentThread():
                 if thread.is_alive():
                     print("Joining Thread: ", thread)
-                    thread.join(timeout=2)
+                    thread.join(timeout=3)
                     print(thread, " Joined")
-
-
-# VJ = VideoJoint()
-# VJ.run()
-
-# CamMan = CamManagement()
-# ht = HeadTrack.HeadTrack()
-
-# thread0 = threading.Thread(target=ctlThread)
-# thread_non_block = threading.Thread(target=client_acceptor, args=(Params.HOST_IP, Params.PORT))
-# thread_non_block.start()
-# logging.info("Socket Acceptor Started!")
-# logging.info("Starting Control Thread")
-# thread0.start()
-
-# cap0 = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-# cap1 = cv2.VideoCapture(1)
-# cap0.set(3, 640)  # width
-# cap0.set(4, 480)  # height
-# cap1.set(3, 640)  # width
-# cap1.set(4, 480)  # height
-#
-# while True:
-#     ret0, img0 = cap0.read()
-#
-#     if ret0:
-#         cv2.imshow("Image0", img0)
-#     ret1, img1 = cap1.read()
-#     if ret1:
-#         cv2.imshow("Image1", img1)
-#
-#     if cv2.waitKey(1) & 0xFF == ord('q'):
-#         break
-
-
-# from pymf import get_MF_devices
-# device_list = get_MF_devices()
-# for i, device_name in enumerate(device_list):
-#     print(f"opencv_index: {i}, device_name: {device_name}")
-#
-# # => opencv_index: 0, device_name: Integrated Webcam

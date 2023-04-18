@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 import sv_ttk
 from Utils import Params
-from ClientVideo import ClientVideo
+from client import ClientVideo
 from PIL import Image, ImageTk
 import cv2
 
@@ -17,9 +17,7 @@ class ClientApp:
         self.root_window.title(windowName)
         self.root_window.geometry("%dx%d" % (Params.VID_W + 30, Params.VID_H + 90))
 
-        sv_ttk.set_theme('dark')  # setting up svttk theme
-
-        self.canvas = tk.Canvas(root_window, width=Params.VID_W, height=Params.VID_H)
+        self.canvas = tk.Canvas(self.root_window, width=Params.VID_W, height=Params.VID_H)
         self.canvas.configure(bg='black')
         self.canvas.place(relx=0.5, rely=0.5, anchor='center')
 
@@ -41,7 +39,7 @@ class ClientApp:
         self.cam_id_select_btn = ttk.Button(self.cam_entry_frame, text='Select Camera', width=20,
                                             command=self.config_cam)
 
-        self.thread_clientVid = ClientVideo()
+        self.thread_clientVid = ClientVideo.ClientVideo()
 
         self.root_window.protocol("WM_DELETE_WINDOW", lambda: self.close(self.root_window))
 
@@ -59,8 +57,8 @@ class ClientApp:
             self.calib_cam()
 
             self.play_selfie_video()
-
-            self.root_window.mainloop()
+            if __name__ == '__main__':
+                self.root_window.mainloop()
 
     def handle_user_right_click(self, event):
         if self.thread_clientVid.calib_flag:

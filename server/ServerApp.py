@@ -6,7 +6,7 @@ import cv2
 from Utils import Params
 from PIL import Image, ImageTk
 import os
-import video_joint
+from server import video_joint
 import time
 
 current_path = os.path.dirname(__file__)
@@ -14,12 +14,11 @@ root_path = os.path.split(current_path)[0]
 
 
 # source: https://solarianprogrammer.com/2018/04/21/python-opencv-show-video-tkinter-window/
-class App:
-    def __init__(self, root_window, window_title, video_source=0):
+class ServerApp:
+    def __init__(self, root_window, window_title):
         self.foto = None  # holds the pop-up window image
         self.photo = None  # holds the main window image
         self.root_window = root_window
-        self.video_source = video_source
         self.root_window.title(window_title)
         self.calib_window_closed = True
 
@@ -31,7 +30,7 @@ class App:
         self.root_window.attributes('-fullscreen', True)
         # self.root_window.configure(bg='black')
 
-        self.canvas = tk.Canvas(root_window, width=self.width_cam, height=self.height_cam)
+        self.canvas = tk.Canvas(self.root_window, width=self.width_cam, height=self.height_cam)
         self.canvas.configure(bg='black')
         self.canvas.place(relx=0.5, rely=0.5, anchor='center')
 
@@ -48,18 +47,20 @@ class App:
 
         self.exit_btn = tk.Button(self.root_window, text='\u274C',
                                   bd='0', width=7, height=3,
-                                  command=lambda: self.close_main_window(self.root_window))
+                                  command=lambda: self.close_main_window())
 
         self.calib_btn.place(relx=0.5, rely=0.01, anchor='n')
         self.exit_btn.place(relx=1.0, rely=0, anchor='ne')
 
-        self.root_window.protocol("WM_DELETE_WINDOW", lambda: self.close_main_window(self.root_window))
+        self.root_window.protocol("WM_DELETE_WINDOW", lambda: self.close_main_window())
 
         self.main_delay = 15
         self.root_play_video()
 
+        if __name__ == '__main__':
+            self.root_window.mainloop()
+
         sv_ttk.set_theme('dark')  # setting up svttk theme
-        self.root_window.mainloop()
 
     def root_play_video(self):
         start_time = time.time()
@@ -85,9 +86,9 @@ class App:
 
         self.root_window.after(self.main_delay, self.root_play_video)
 
-    def close_main_window(self, window):
+    def close_main_window(self):
         self.VJ.stop()
-        window.destroy()
+        self.root_window.destroy()
 
     def start_popup_window(self):
         pop_up_thread = PopUpWindow(self)
@@ -177,4 +178,4 @@ class PopUpWindow(threading.Thread):
 
 
 if __name__ == '__main__':
-    App(tk.Tk(), "Meeting")
+    ServerApp(tk.Tk(), "Meeting")
