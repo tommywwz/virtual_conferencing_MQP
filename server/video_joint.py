@@ -373,7 +373,7 @@ class VideoJoint:
             if thread is not threading.currentThread():
                 if thread.is_alive():
                     print("Joining Thread: ", thread)
-                    thread.join(timeout=5)
+                    thread.join(timeout=2)
                     print(thread, " Joined")
 
 
