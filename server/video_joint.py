@@ -103,6 +103,7 @@ class CamThread(threading.Thread):
             self.user_cam = cv2.VideoCapture(cam_id, cv2.CAP_DSHOW)
             self.user_cam.set(3, Params.RAW_CAM_W)  # width
             self.user_cam.set(4, Params.RAW_CAM_H)  # height
+            self.user_cam_id = cam_id
 
     def camPreview(self, CamMan, previewName, camID):
         # cam = vids[camID]

@@ -1,5 +1,6 @@
 import threading
 import tkinter as tk
+from tkinter import ttk
 import sv_ttk
 import cv2
 from Utils import Params
@@ -42,13 +43,14 @@ class App:
         # self.new_popup_window()  # open the popup window at the start
 
         # self.root_window.bind('t', self.new_popup_window)
-        self.calib_btn = tk.Button(self.root_window, text='Calibrate my camera', width=20,
-                                   height=2, command=self.start_popup_window)
-        self.calib_btn.pack()
+        self.calib_btn = ttk.Button(self.root_window, text='Calibrate my camera', width=20,
+                                   command=self.start_popup_window, style='TButton')
 
         self.exit_btn = tk.Button(self.root_window, text='\u274C',
                                   bd='0', width=7, height=3,
                                   command=lambda: self.close_main_window(self.root_window))
+
+        self.calib_btn.place(relx=0.5, rely=0.01, anchor='n')
         self.exit_btn.place(relx=1.0, rely=0, anchor='ne')
 
         self.root_window.protocol("WM_DELETE_WINDOW", lambda: self.close_main_window(self.root_window))
@@ -97,6 +99,7 @@ class PopUpWindow(threading.Thread):
     def __init__(self, root):
         threading.Thread.__init__(self)
         self.root = root
+        self.root.calib_btn.configure(state='disabled')
         self.new_window = tk.Toplevel(self.root.root_window)
         self.new_window.title("Calibration")
 
@@ -105,22 +108,26 @@ class PopUpWindow(threading.Thread):
 
         self.canvas = tk.Canvas(self.new_window, width=Params.VID_W,
                                 height=Params.VID_H)
+        self.left_padding_canvas = tk.Canvas(self.new_window, width=1,
+                                             height=Params.VID_H)
+        self.right_padding_canvas = tk.Canvas(self.new_window, width=1,
+                                              height=Params.VID_H)
 
         self.canvas.bind("<Button-1>", self.handle_user_left_click)
         self.canvas.bind('<Button-3>', self.handle_user_right_click)
 
-        self.btn = tk.Button(self.new_window, text='Looks Good!', width=20,
-                             height=2, bd='1', command=lambda: self.close_pop_window())
+        self.btn = ttk.Button(self.new_window, text='Finish Calibration', width=20,
+                              command=lambda: self.close_pop_window(), style='Accent.TButton')
 
-        self.cam_entry = tk.Entry(self.new_window, width=20)
-        self.cam_select_btn = tk.Button(self.new_window, text='Select Camera', width=20,
-                                        height=2, bd='1', command=lambda: self.select_camera())
+        self.cam_entry = ttk.Entry(self.new_window, width=5)
+        self.cam_select_btn = ttk.Button(self.new_window, text='Select Camera', width=20,
+                                         command=lambda: self.select_camera())
 
-        self.canvas.pack()
-        self.btn.pack()
-        self.cam_entry.pack()
-        self.cam_select_btn.pack()
+        self.canvas.grid(row=0, column=0, columnspan=3, padx=10, pady=2)
 
+        self.btn.grid(row=1, column=0, padx=4)
+        self.cam_select_btn.grid(row=1, column=1, padx=4, pady=5)
+        self.cam_entry.grid(row=1, column=2, padx=4, pady=5)
         # setup closing protocol
         self.new_window.protocol("WM_DELETE_WINDOW", lambda: self.close_pop_window())
         self.pop_delay = 15
@@ -164,6 +171,8 @@ class PopUpWindow(threading.Thread):
         while not self.root.VJ.Q_userFrame.empty():
             item = self.root.VJ.Q_userFrame.get()
         self.root.VJ.CamMan.calib = False
+        self.root.calib_btn.configure(state='normal')
+        self.root.root_window.focus_set()
         self.new_window.destroy()
 
 

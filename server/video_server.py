@@ -10,7 +10,7 @@ class VideoServer:
         self.port = port
         self.CamMan = CamMan
         self.exit_event = threading.Event()
-        # create an datagram socket (single UDP request and response, then close)
+        # create a datagram socket (single UDP request and response, then close)
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         # connect to an address on the internet, that's likely to always be up
         # (the Google primary DNS is a good bet)
