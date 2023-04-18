@@ -1,5 +1,6 @@
 import socket
 import tkinter as tk
+from tkinter import ttk
 import sv_ttk
 from Utils import Params
 from ClientVideo import ClientVideo
@@ -12,10 +13,11 @@ CamID = 0
 class ClientApp:
     def __init__(self, root_window, windowName):
         self.photo = None
-
         self.root_window = root_window
         self.root_window.title(windowName)
         self.root_window.geometry("%dx%d" % (Params.VID_W + 30, Params.VID_H + 90))
+
+        sv_ttk.set_theme('dark')  # setting up svttk theme
 
         self.canvas = tk.Canvas(root_window, width=Params.VID_W, height=Params.VID_H)
         self.canvas.configure(bg='black')
@@ -23,25 +25,27 @@ class ClientApp:
 
         self.calib_text = tk.StringVar()
         self.calib_text.set("Calibrate my camera")
-        self.calib_btn = tk.Button(self.root_window, textvariable=self.calib_text, width=20,
-                                   height=2, command=self.calib_cam)
-        self.calib_btn.pack()
+        self.calib_btn = ttk.Button(self.root_window, textvariable=self.calib_text, width=20,
+                                    command=self.calib_cam, style="Accent.TButton")
 
-        self.root_window.protocol("WM_DELETE_WINDOW", lambda: self.close(self.root_window))
-
-        sv_ttk.set_theme('dark')  # setting up svttk theme
+        self.calib_btn.place(relx=0.5, rely=0.01, anchor='n')
 
         self.canvas.bind("<Button-1>", self.handle_user_left_click)
         self.canvas.bind("<Button-3>", self.handle_user_right_click)
 
-        self.cam_id_entry = tk.Entry(self.root_window, width=10)
-        self.cam_id_select_btn = tk.Button(self.root_window, text='Select Camera', width=20,
-                                           height=2, command=self.config_cam)
-        self.cam_id_entry.pack(side="bottom")
-        self.cam_id_select_btn.pack(side="bottom")
+        self.cam_entry_frame = ttk.Frame(self.root_window, width=Params.VID_W, height=20)
+
+        self.cam_entry_frame.pack(side="bottom")
+
+        self.cam_id_entry = ttk.Entry(self.cam_entry_frame, width=5)
+        self.cam_id_select_btn = ttk.Button(self.cam_entry_frame, text='Select Camera', width=20,
+                                            command=self.config_cam)
 
         self.thread_clientVid = ClientVideo()
 
+        self.root_window.protocol("WM_DELETE_WINDOW", lambda: self.close(self.root_window))
+
+        # start ip window
         self.popup_ip_window = PopupWindow(self)
         self.popup_ip_window.ip_window.wait_window()
 
@@ -51,6 +55,8 @@ class ClientApp:
             # start client video thread
             self.thread_clientVid.setDaemon(True)
             self.thread_clientVid.start()
+
+            self.calib_cam()
 
             self.play_selfie_video()
 
@@ -68,15 +74,16 @@ class ClientApp:
             print("Mouse clicked at x =", x, "y =", y)
 
     def calib_cam(self):
-        if self.thread_clientVid.calib_flag:  # if switch from calib to normal
-            self.cam_id_entry.pack_forget()
-            self.cam_id_select_btn.pack_forget()
-            self.calib_text.set("Calibrate my camera")
-        else:  # if switch from normal to calib
-            self.cam_id_entry.pack(side="bottom")
-            self.cam_id_select_btn.pack(side="bottom")
-            self.calib_text.set("Finish calibration")
+        cab = self.thread_clientVid.calib_flag
         self.thread_clientVid.toggle_calib()
+        if cab:  # if in calib switch to normal
+            self.cam_id_entry.grid_forget()
+            self.cam_id_select_btn.grid_forget()
+            self.calib_text.set("Calibrate my camera")
+        else:  # if in normal switch to calib
+            self.cam_id_entry.grid(row=0, column=0, padx=5, pady=5)
+            self.cam_id_select_btn.grid(row=0, column=1, padx=5, pady=5)
+            self.calib_text.set("Finish calibration")
 
     def config_cam(self):
         text = self.cam_id_entry.get()
@@ -120,9 +127,9 @@ class PopupWindow:
         self.ip_window.attributes("-topmost", True)  # <-- Add this line
         # self.ip_window.configure(bg='white')
 
-        self.ip_entry = tk.Entry(self.ip_window, width=30)
+        self.ip_entry = ttk.Entry(self.ip_window, width=30)
         self.ip_entry.focus_set()
-        self.button = tk.Button(self.ip_window, text="Enter", command=self.set_IP)
+        self.button = ttk.Button(self.ip_window, text="Enter", command=self.set_IP, style="Accent.TButton")
         self.ip_window.bind('<Return>', self.on_enter_event)
         self.error_label = tk.Label(self.ip_window, text="Failed to connect", fg="red")
 
@@ -152,6 +159,9 @@ class PopupWindow:
             self.caller.thread_clientVid.set_connection(ip)
             self.connected = True
             self.popup_close()
+        except socket.timeout as e:
+            self.error_label.pack(side="top", expand=True)
+            print("Connection time out: ", e)
         except socket.error as e:
             self.error_label.pack(side="top", expand=True)
             print("Error setting IP: ", e)
