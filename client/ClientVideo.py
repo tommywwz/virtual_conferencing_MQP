@@ -68,26 +68,29 @@ class ClientVideo(threading.Thread):
         self.frameClass = Frame(client_id)
 
     def set_cam(self, camID):
-        with cam_mutex:
-            if self.cam is not None and camID == self.old_cam_id:
-                return
-            self.cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
-            self.cam.set(3, Params.RAW_CAM_W)  # width
-            self.cam.set(4, Params.RAW_CAM_H)  # height
-            self.old_cam_id = camID
-            # check if the camera is opened
-            if not self.cam.isOpened():
-                raise IOError("Cannot open webcam")
-            else:
-                pass
+
+        if self.cam is not None and camID == self.old_cam_id:
+            return
+        self.cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
+        self.cam.set(3, Params.RAW_CAM_W)  # width
+        self.cam.set(4, Params.RAW_CAM_H)  # height
+        self.old_cam_id = camID
+        # check if the camera is opened
+        if self.cam.isOpened():
+            pass
+        else:
+            raise IOError("Cannot open webcam")
 
     def set_connection(self, IP, port=9999):
         self.HOST_IP = IP
         self.PORT = port
         # create socket
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_socket.settimeout(5)
         try:
             self.client_socket.connect((self.HOST_IP, self.PORT))  # a tuple
+        except socket.timeout:
+            raise socket.timeout
         except socket.error as e:
             raise e
 
@@ -99,10 +102,37 @@ class ClientVideo(threading.Thread):
             with self.close_lock:
                 if self.exit_flag: break
 
-                if self.cam.isOpened():
-                    with cam_mutex:
-                        _, frame = self.cam.read()
-                    frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
+                loc_cam = self.cam
+
+                if self.calib_flag:
+                    if loc_cam.isOpened():
+                        success, frame = loc_cam.read()
+                        if success:
+                            frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
+                            self.do_calibration(frame)
+                    else:
+                        frame, _ = gen_fake_frame()
+                        frame = put_text_on_center(frame, "Camera not found", color=(0, 0, 255), font_scale=1,
+                                                   thickness=2)
+                        self.Q_selfie.put(frame)
+
+                    # when calibrating, sends blank image to server
+                    blank_screen_for_server, fake_edge = gen_fake_frame()
+                    blank_screen_for_server = put_text_on_center(blank_screen_for_server, "Calibrating...",
+                                                                 color=(0, 0, 255), font_scale=3)
+                    self.frameClass.updateFrame(image=blank_screen_for_server, edge_line=fake_edge)
+                    try:
+                        self.send_msg(self.frameClass)
+                    except ConnectionResetError or ConnectionError as e:
+                        print(e)
+                        self.calib_flag = False
+                        continue
+                    continue
+
+                if loc_cam.isOpened():
+                    success, frame = loc_cam.read()
+                    if success:
+                        frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
                 else:
                     frame, _ = gen_fake_frame()
                     frame = put_text_on_center(frame, "Camera not found", color=(0, 0, 255), font_scale=1, thickness=2)
@@ -113,43 +143,23 @@ class ClientVideo(threading.Thread):
                     self.Q_selfie.put(frame)
                     continue
 
-                if self.calib_flag:
-                    self.do_calibration(frame)
-                    # when calibrating, sends blank image to server
-                    blank_screen_for_server, fake_edge = gen_fake_frame()
-                    blank_screen_for_server = put_text_on_center(blank_screen_for_server, "Calibrating...",
-                                                                 color=(0, 0, 255), font_scale=3)
-                    self.frameClass.updateFrame(image=blank_screen_for_server, edge_line=fake_edge)
-                    pickled_frame = pickle.dumps(self.frameClass)
-                    # data length followed by serialized frame object
-                    place_hold_msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
-                    try:
-                        self.send_msg(place_hold_msg)
-                    except ConnectionResetError or ConnectionError as e:
-                        print(e)
-                        self.calib_flag = False
-                        continue
-                    continue
-
                 rsz_image = self.do_resize(frame)
                 self.Q_selfie.put(frame)
 
                 self.frameClass.updateFrame(image=rsz_image, edge_line=self.edge_line)  # update edge information
-
-                pickled_frame = pickle.dumps(self.frameClass)
-
-                # data length followed by serialized frame object
-                msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
                 try:
-                    self.send_msg(msg)
+                    self.send_msg(self.frameClass)
                 except ConnectionResetError or ConnectionError as e:
                     print(e)
                     continue
 
-    def send_msg(self, msg):
+    def send_msg(self, frameClass):
         if self.client_socket is None:
             raise ConnectionError("Client socket is None")
         try:
+            pickled_frame = pickle.dumps(frameClass)
+            # data length followed by serialized frame object
+            msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
             self.client_socket.sendall(msg)
         except ConnectionResetError as e:
             self.server_down.set()
