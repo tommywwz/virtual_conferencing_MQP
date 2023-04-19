@@ -13,55 +13,88 @@ from Utils.AutoResize import AutoResize
 buff_4K = 4 * 1024
 
 
+def gen_fake_frame():
+    blank_frame = np.zeros((Params.VID_H, Params.VID_W, 3), dtype=np.uint8)
+    fake_edge = (0, 0)
+    return blank_frame, fake_edge
+
+
+def put_text_on_center(frame, text, color=(0, 0, 255), font_scale=1, thickness=2):
+    text_size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+    text_w, text_h = text_size
+    frame_h, frame_w = frame.shape[:2]
+    cv2.putText(frame, text, (int((frame_w - text_w) / 2), int((frame_h - text_h) / 2)), cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale, color, thickness)
+    # cv2.putText(frame,
+    #             text='Calibrating',
+    #             org=int((frame_w - text_w) / 2), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=font_scale, color=color,
+    #             thickness=1, lineType=cv2.LINE_AA, bottomLeftOrigin=False)
+    return frame
+
+
+cam_mutex = threading.Lock()
+
+
 class ClientVideo(threading.Thread):
 
-    def __init__(self, CamID):
+    def __init__(self):
         threading.Thread.__init__(self)
 
         self.PORT = 9999
         self.HOST_IP = '192.168.1.3'  # paste your server ip address here
 
-        self.CamID = CamID
+        self.cam = None
+        self.old_cam_id = 0
+        self.set_cam(self.old_cam_id)
 
         self.close_lock = threading.Lock()
-        self.calib_flag = True
-        self.exit_flag = False
         self.client_socket = None
         self.Q_selfie = queue.Queue(maxsize=3)
         self.edge_line = (0, 0)
         self.resize_ratio = 1
         self.new_shape = (Params.VID_W, Params.VID_H)
 
+        self.calib_flag = False
+        self.exit_flag = False
+        self.server_down = threading.Event()
+
         self.mouse_location = None  # location of user mouse click
 
         self.edge_detector = edge_detection.EdgeDetection()
         self.client_auto_resize = AutoResize()
 
-        self.cam = cv2.VideoCapture(self.CamID, cv2.CAP_DSHOW)
+        client_id = socket.gethostbyname(socket.gethostname())
+        print("HOST NAME: ", client_id)
+        self.frameClass = Frame(client_id)
+
+    def set_cam(self, camID):
+
+        if self.cam is not None and camID == self.old_cam_id:
+            return
+        self.cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
         self.cam.set(3, Params.RAW_CAM_W)  # width
         self.cam.set(4, Params.RAW_CAM_H)  # height
-
-        camID = socket.gethostbyname(socket.gethostname())
-        print("HOST NAME: ", camID)
-        self.frameClass = Frame(camID)
+        self.old_cam_id = camID
+        # check if the camera is opened
+        if self.cam.isOpened():
+            pass
+        else:
+            raise IOError("Cannot open webcam")
 
     def set_connection(self, IP, port=9999):
         self.HOST_IP = IP
         self.PORT = port
         # create socket
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_socket.settimeout(5)
         try:
             self.client_socket.connect((self.HOST_IP, self.PORT))  # a tuple
+        except socket.timeout:
+            raise socket.timeout
         except socket.error as e:
             raise e
 
     def run(self):
-
-        # calibration
-        while self.cam.isOpened() and self.calib_flag:
-            success, frame = self.cam.read()
-            self.do_calibration(frame)
-
         if self.exit_flag:
             exit(0)  # exit the thread
 
@@ -69,53 +102,91 @@ class ClientVideo(threading.Thread):
             with self.close_lock:
                 if self.exit_flag: break
 
-                success, frame = self.cam.read()
-                if not success: continue
+                loc_cam = self.cam
 
                 if self.calib_flag:
+                    if loc_cam.isOpened():
+                        success, frame = loc_cam.read()
+                        if success:
+                            frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
+                            self.do_calibration(frame)
+                    else:
+                        frame, _ = gen_fake_frame()
+                        frame = put_text_on_center(frame, "Camera not found", color=(0, 0, 255), font_scale=1,
+                                                   thickness=2)
+                        self.Q_selfie.put(frame)
+
                     # when calibrating, sends blank image to server
-                    blank_frame = np.zeros((Params.VID_H, Params.VID_W, 3), dtype=np.uint8)
-                    fake_edge = (0, 0)
-                    self.frameClass.updateFrame(image=blank_frame, edge_line=fake_edge)
-                    pickled_frame = pickle.dumps(self.frameClass)
-                    # data length followed by serialized frame object
-                    place_hold_msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
-                    self.client_socket.sendall(place_hold_msg)
-                    self.do_calibration(frame)
+                    blank_screen_for_server, fake_edge = gen_fake_frame()
+                    blank_screen_for_server = put_text_on_center(blank_screen_for_server, "Calibrating...",
+                                                                 color=(0, 0, 255), font_scale=3)
+                    self.frameClass.updateFrame(image=blank_screen_for_server, edge_line=fake_edge)
+                    try:
+                        self.send_msg(self.frameClass)
+                    except ConnectionResetError or ConnectionError as e:
+                        print(e)
+                        self.calib_flag = False
+                        continue
                     continue
 
-                frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
-
-
-                # using the resizing ratio to resize image
-                if self.resize_ratio > 1:
-                    # if head is smaller than reference, the photo need to be enlarged
-                    rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_LINEAR)
-                    ah, aw = rsz_image.shape[:2]
-                    dn = round((ah + Params.VID_H) * 0.5)
-                    up = round((ah - Params.VID_H) * 0.5)
-                    lt = round((aw - Params.VID_W) * 0.5)
-                    rt = round((aw + Params.VID_W) * 0.5)
-                    rsz_image = rsz_image[up:dn, lt:rt]
-                    # gets an image the same as the standard shape
+                if loc_cam.isOpened():
+                    success, frame = loc_cam.read()
+                    if success:
+                        frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
                 else:
-                    # if head is bigger than reference, the photo need to be shrunk
-                    rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_AREA)
-                    # gets a smaller image here
-                # end of image resizing
+                    frame, _ = gen_fake_frame()
+                    frame = put_text_on_center(frame, "Camera not found", color=(0, 0, 255), font_scale=1, thickness=2)
+                    self.Q_selfie.put(frame)
+                    continue
 
-                self.frameClass.updateFrame(image=rsz_image, edge_line=self.edge_line)  # update edge information
+                if self.client_socket is None:
+                    self.Q_selfie.put(frame)
+                    continue
 
-                pickled_frame = pickle.dumps(self.frameClass)
-
-                # data length followed by serialized frame object
-                msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
-                self.client_socket.sendall(msg)
-
+                rsz_image = self.do_resize(frame)
                 self.Q_selfie.put(frame)
 
+                self.frameClass.updateFrame(image=rsz_image, edge_line=self.edge_line)  # update edge information
+                try:
+                    self.send_msg(self.frameClass)
+                except ConnectionResetError or ConnectionError as e:
+                    print(e)
+                    continue
+
+    def send_msg(self, frameClass):
+        if self.client_socket is None:
+            raise ConnectionError("Client socket is None")
+        try:
+            pickled_frame = pickle.dumps(frameClass)
+            # data length followed by serialized frame object
+            msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
+            self.client_socket.sendall(msg)
+        except ConnectionResetError as e:
+            self.server_down.set()
+            self.client_socket = None
+            raise e
+
+    def do_resize(self, frame):
+        # -------------using the resizing ratio to resize image----------------
+        if self.resize_ratio > 1:
+            # if head is smaller than reference, the photo need to be enlarged
+            rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_LINEAR)
+            ah, aw = rsz_image.shape[:2]
+            dn = round((ah + Params.VID_H) * 0.5)
+            up = round((ah - Params.VID_H) * 0.5)
+            lt = round((aw - Params.VID_W) * 0.5)
+            rt = round((aw + Params.VID_W) * 0.5)
+            rsz_image = rsz_image[up:dn, lt:rt]
+            # gets an image the same as the standard shape
+        else:
+            # if head is bigger than reference, the photo need to be shrunk
+            rsz_image = cv2.resize(frame, self.new_shape, interpolation=cv2.INTER_AREA)
+            # gets a smaller image here
+        # -------------end of image resizing----------------
+        return rsz_image
+
     def do_calibration(self, frame):
-        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+        # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         font = cv2.FONT_HERSHEY_SIMPLEX
         linetype = cv2.LINE_AA
         # calculate the resizing ratio
@@ -202,8 +273,7 @@ class ClientVideo(threading.Thread):
 
 
 if __name__ == "__main__":
-    camid = 1
-    thread0 = ClientVideo(camid)
+    thread0 = ClientVideo()
     # thread1 = threading.Thread(target=audio_stream)
     thread0.start()
     # thread1.start()

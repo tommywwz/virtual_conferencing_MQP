@@ -17,6 +17,7 @@ class CamManagement:
 
     def __init__(self):
         self.FRAMES_dictQ = {}  # a dictionary that holds a queue of Frame data structure
+        self.UserFramesQ = Queue(maxsize=3)  # user image queue
         self.TERM = False
         # self.edge_lines = {}  # edge equation (a, b) for each cam
         # self.edge_y = {}  # average height of edge for each cam
@@ -28,6 +29,9 @@ class CamManagement:
         # initialize a queue for the given camID
         # !your must init a frame queue in the dictionary to put and get frames!
         with FRAMES_lock:
+            if camID in self.FRAMES_dictQ:
+                print("!!Cam already exists!!")
+                return
             self.FRAMES_dictQ[camID] = Queue(maxsize=queue_size)
 
     def put_frame(self, camID, FRAME):
@@ -35,6 +39,12 @@ class CamManagement:
         # !our must init a frame queue in the dictionary to put and get frames!
         # No need to lock here
         self.FRAMES_dictQ[camID].put(FRAME)
+
+    def put_user_frame(self, frame):
+        self.UserFramesQ.put(frame)
+
+    def get_user_frame(self):
+        return self.UserFramesQ.get()
 
     def get_frames(self):
         # !your must init a frame queue in the dictionary to put and get frames!
@@ -62,7 +72,7 @@ class CamManagement:
 
     def delete_cam(self, camID):
         flag_frame = Frame(camID)
-        flag_frame.close = True  # genrate a frame to
+        flag_frame.close = True  # genrate a frame to inform the thread to stop receiving frames of this cam
         self.FRAMES_dictQ[camID].put(flag_frame)
         with camDEL_lock:
             del self.FRAMES_dictQ[camID]

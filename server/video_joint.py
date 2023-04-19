@@ -1,4 +1,6 @@
 import os
+import time
+
 import cv2
 import numpy as np
 import threading
@@ -8,7 +10,7 @@ from Utils import edge_detection, HeadTrack, Params, CamManagement
 from Utils import bg_remove_mp as bgmp
 from Utils.AutoResize import AutoResize
 from Utils.Frame import Frame
-import video_server
+from server import video_server
 
 SERVER_CAM_ID = 0
 
@@ -25,6 +27,9 @@ vid4 = root_path + "/assets/vid/demo4.mp4"
 vid5 = root_path + "/assets/vid/demo5.mp4"
 vid6 = root_path + "/assets/vid/demo6.mp4"
 vids = {101: vid1, 102: vid2, 103: vid3, 104: vid4, 105: vid5, 106: vid6}
+
+
+cam_mutex = threading.Lock()
 
 
 def do_calib(edge_detector, frame, mouse_location):
@@ -78,16 +83,60 @@ class CamThread(threading.Thread):
         self.CamMan = CamMan
         self.previewName = previewName
         self.camID = camID
+        self.user_cam_id = 0
+        self.user_cam = None
         self.if_usercam = if_usercam
         self.if_demo = if_demo
         self.mouse_location = None
 
     def run(self):
-        print("Starting Thread" + self.previewName)
+        print("Starting Thread: " + self.previewName)
         if self.if_demo:  # if starting a demo video, starts videoPreview, otherwise, starts camera thread
             self.videoPreview(self.CamMan, self.previewName, self.camID)
         else:
-            self.camPreview(self.CamMan, self.previewName, self.camID, self.if_usercam)
+            self.camPreview(self.CamMan, self.previewName, self.user_cam_id)
+
+    def set_user_cam(self, cam_id):
+        with cam_mutex:
+            if self.user_cam is not None and self.user_cam_id == cam_id:
+                return
+            self.user_cam = cv2.VideoCapture(cam_id, cv2.CAP_DSHOW)
+            self.user_cam.set(3, Params.RAW_CAM_W)  # width
+            self.user_cam.set(4, Params.RAW_CAM_H)  # height
+            self.user_cam_id = cam_id
+
+    def camPreview(self, CamMan, previewName, camID):
+        # cam = vids[camID]
+        # cv2.namedWindow("iso frame " + str(camID))
+        # Real time video cap
+        self.set_user_cam(camID)
+        edge_detector = edge_detection.EdgeDetection()
+        empty_frame = np.zeros((Params.VID_H, Params.VID_W, 3), np.uint8)
+
+        while True:
+            with cam_mutex:
+                success, frame = self.user_cam.read()
+                isOpened = self.user_cam.isOpened()
+
+            if not success or not isOpened:
+                # skip if no frame
+                CamMan.put_user_frame(empty_frame)
+                continue
+
+            frame = cv2.rotate(cv2.flip(frame, 1), cv2.ROTATE_90_CLOCKWISE)
+
+            if CamMan.calib:  # check if calibration is toggled in the user's cam thread
+                frame, _ = do_calib(edge_detector, frame, self.mouse_location)
+                # if in calibration, update frame and edge information
+
+            CamMan.put_user_frame(frame)
+            # logging.debug(str(frameClass.edge_line))
+
+            if CamMan.check_Term():
+                break
+
+        print(Params.OKGREEN + "Exiting UserCam" + previewName + Params.ENDC)
+        self.user_cam.release()
 
     def videoPreview(self, CamMan, previewName, camID):
         # for video Demo, probably never used
@@ -182,42 +231,6 @@ class CamThread(threading.Thread):
         print("Exiting " + previewName)
         cam.release()
 
-    def camPreview(self, CamMan, previewName, camID, if_usercam):
-        # cam = vids[camID]
-        # cv2.namedWindow("iso frame " + str(camID))
-        # Real time video cap
-        cam = cv2.VideoCapture(camID, cv2.CAP_DSHOW)
-        cam.set(3, Params.RAW_CAM_W)  # width
-        cam.set(4, Params.RAW_CAM_H)  # height
-        frameClass = Frame(camID)
-        CamMan.init_cam(camID)
-        edge_detector = edge_detection.EdgeDetection()
-
-        while True:
-            success, frame = cam.read()
-
-            if not success:
-                # skip if no frame
-                continue
-
-            frame = cv2.rotate(cv2.flip(frame, 1), cv2.ROTATE_90_CLOCKWISE)
-
-            if CamMan.calib and if_usercam:  # check if calibration is toggled in the user's cam thread
-                frame, edge = do_calib(edge_detector, frame, self.mouse_location)
-                frameClass.updateFrame(image=frame, edge_line=edge)
-                # if in calibration, update frame and edge information
-            else:
-                frameClass.updateFrame(image=frame)  # if not in calibration, update frame only
-
-            CamMan.put_frame(camID=camID, FRAME=frameClass)
-            # logging.debug(str(frameClass.edge_line))
-
-            if CamMan.check_Term():
-                break
-
-        print(Params.OKGREEN + "Exiting UserCam" + previewName + Params.ENDC)
-        cam.release()
-
 
 def stackParam(cam_dict, bg_shape: int):
     # should be called everytime a new cam joined
@@ -252,29 +265,40 @@ def stackParam(cam_dict, bg_shape: int):
     return fit_shape, w_step, margins
 
 
-class VideoInterface:
+class VideoJoint:
     def __init__(self):
         self.CamMan = CamManagement.CamManagement()
         self.ht = HeadTrack.HeadTrack()
         self.Q_FrameForDisplay = Queue(maxsize=3)
         self.Q_userFrame = Queue(maxsize=3)
+        self.mouse_location_FE = None
+
         self.calib = False
         self.Term = False
-        self.mouse_location_FE = None
+        self.update_user_cam_id = threading.Event()
+        self.user_cam_id = 0
 
         self.server = video_server.VideoServer(Params.HOST_IP, Params.PORT, self.CamMan)
 
     def run(self):
         server_thread = threading.Thread(target=self.server.start, args=())
+        server_thread.setDaemon(True)
         server_thread.start()
         logging.info("Socket Acceptor Started!")
 
         thread0 = threading.Thread(target=self.ctlThread, args=())
+        thread0.setDaemon(True)
         thread0.start()
         logging.info("Control Thread Started!")
         # thread_non_block = threading.Thread(target=self.client_acceptor, args=(Params.HOST_IP, Params.PORT))
         # thread_non_block.start()
         # logging.info("Socket Acceptor Started!")
+
+    def update_user_cam_FE(self, camID):
+        while self.update_user_cam_id.is_set():
+            time.sleep(0.1)
+        self.update_user_cam_id.set()
+        self.user_cam_id = camID
 
     def ctlThread(self):
         CamMan = self.CamMan
@@ -300,26 +324,27 @@ class VideoInterface:
         while not self.Term:
             frame_dict = CamMan.get_frames()
 
-            if not frame_dict:
-                continue  # if frame dictionary is empty, continue
-            user_feed = frame_dict[userCam].img
-            if self.calib:
-                camThread.mouse_location = self.mouse_location_FE
-                CamMan.calib = True
-                self.Q_userFrame.put(user_feed)
-
-            frame_dict.pop(userCam, None)  # user camera won't be displayed
-
             cam_count = len(frame_dict.keys())  # get the number of camera connected
             if cam_count != cam_loaded:  # update the stack parameter everytime a new cam joined or left
                 cam_loaded = cam_count
                 fit_shape, w_step, margins = stackParam(frame_dict, imgBG.shape)
 
+            if self.update_user_cam_id.is_set():
+                userCam = self.user_cam_id
+                self.update_user_cam_id.clear()
+                camThread.set_user_cam(userCam)
+
+            user_frame = CamMan.get_user_frame()
+            if self.CamMan.calib:
+                camThread.mouse_location = self.mouse_location_FE
+                self.Q_userFrame.put(user_frame)
+
             imgStacked = bgmp.stackIMG(frame_dict, imgBG, fit_shape, w_step, margins)
 
-            imgBG_output = ht.HeadTacker(cv2.flip(user_feed, 1), imgStacked, hist=10)
-            a_rsz.check_bound(user_feed, imgBG_output)
+            imgBG_output = ht.HeadTacker(cv2.flip(user_frame, 1), imgStacked, hist=10)
+            a_rsz.check_bound(user_frame, imgBG_output)
             self.Q_FrameForDisplay.put(imgBG_output)
+            # print("put")
 
         print(Params.OKGREEN + "Closing Cam Control Thread" + Params.ENDC)
         CamMan.set_Term(True)  # inform each camera threads to terminate
@@ -330,63 +355,23 @@ class VideoInterface:
         self.Term = True
 
         print("!!Dumping main window queue!!")
-        if not self.Q_FrameForDisplay.empty():
-            while not self.Q_FrameForDisplay.empty():
-                item = self.Q_FrameForDisplay.get()
-                print("dequeued one item")
-        else:
-            print("The queue is empty.")
+        while not self.Q_FrameForDisplay.empty():
+            item = self.Q_FrameForDisplay.get()
+            print("dequeued one item")
+
+        print("The main window queue is empty.")
 
         print("!!Dumping selfie queue!!")
-        if not self.Q_userFrame.empty():
-            while not self.Q_userFrame.empty():
-                item = self.Q_userFrame.get()
-                print("dequeued one item")
-        else:
-            print("The queue is empty.")
+
+        while not self.Q_userFrame.empty():
+            item = self.Q_userFrame.get()
+            print("dequeued one item")
+
+        print("The selfie queue is empty.")
 
         for thread in threading.enumerate():
             if thread is not threading.currentThread():
-                thread.join()
-                print("Joined Thread")
-
-
-# VJ = VideoJoint()
-# VJ.run()
-
-# CamMan = CamManagement()
-# ht = HeadTrack.HeadTrack()
-
-# thread0 = threading.Thread(target=ctlThread)
-# thread_non_block = threading.Thread(target=client_acceptor, args=(Params.HOST_IP, Params.PORT))
-# thread_non_block.start()
-# logging.info("Socket Acceptor Started!")
-# logging.info("Starting Control Thread")
-# thread0.start()
-
-# cap0 = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-# cap1 = cv2.VideoCapture(1)
-# cap0.set(3, 640)  # width
-# cap0.set(4, 480)  # height
-# cap1.set(3, 640)  # width
-# cap1.set(4, 480)  # height
-#
-# while True:
-#     ret0, img0 = cap0.read()
-#
-#     if ret0:
-#         cv2.imshow("Image0", img0)
-#     ret1, img1 = cap1.read()
-#     if ret1:
-#         cv2.imshow("Image1", img1)
-#
-#     if cv2.waitKey(1) & 0xFF == ord('q'):
-#         break
-
-
-# from pymf import get_MF_devices
-# device_list = get_MF_devices()
-# for i, device_name in enumerate(device_list):
-#     print(f"opencv_index: {i}, device_name: {device_name}")
-#
-# # => opencv_index: 0, device_name: Integrated Webcam
+                if thread.is_alive():
+                    print("Joining Thread: ", thread)
+                    thread.join(timeout=3)
+                    print(thread, " Joined")
