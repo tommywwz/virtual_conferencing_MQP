@@ -44,17 +44,18 @@ class ClientHandler(threading.Thread):
             stream.write(data)
 
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-socket_addr = (HOST_IP, PORT + 1)
-server.bind(socket_addr)
-server.listen(5)
+if __name__ == '__main__':
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    socket_addr = (HOST_IP, PORT + 1)
+    server.bind(socket_addr)
+    server.listen(5)
 
-while True:
-    client, client_addr = server.accept()
-    if client:
-        print("Got audio connection from: " + str(client_addr))
-        clientThread = ClientHandler(client_addr, client)
-        clientThread.start()
+    while True:
+        client, client_addr = server.accept()
+        if client:
+            print("Got audio connection from: " + str(client_addr))
+            clientThread = ClientHandler(client_addr, client)
+            clientThread.start()
 
-server.close()
+    server.close()
 
