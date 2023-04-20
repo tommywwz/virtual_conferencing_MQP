@@ -2,7 +2,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 import cv2
-from Utils import Params
+from Utils import Params, Tools
 from PIL import Image, ImageTk
 import os
 from server import video_joint
@@ -34,6 +34,11 @@ class ServerApp:
         self.canvas.configure(bg='black')
         self.canvas.place(relx=0.5, rely=0.5, anchor='center')
 
+        self.host_ip_text = tk.StringVar()
+        self.host_ip_text.set("Host IP: " + Tools.get_host_ip())
+        self.host_ip_label = ttk.Label(self.root_window, textvariable=self.host_ip_text, width=20,
+                                       style="Accent.TLabel")
+
         self.VJ = video_joint.VideoJoint()
         self.VJ.run()
 
@@ -43,7 +48,7 @@ class ServerApp:
 
         # self.root_window.bind('t', self.new_popup_window)
         self.calib_btn = ttk.Button(self.root_window, text='Calibrate my camera', width=20,
-                                   command=self.start_popup_window, style='TButton')
+                                    command=self.start_popup_window, style='TButton')
 
         self.exit_btn = tk.Button(self.root_window, text='\u274C',
                                   bd='0', width=7, height=3,
@@ -51,6 +56,7 @@ class ServerApp:
 
         self.calib_btn.place(relx=0.5, rely=0.01, anchor='n')
         self.exit_btn.place(relx=1.0, rely=0, anchor='ne')
+        self.host_ip_label.place(relx=0, rely=1, anchor='sw')
 
         self.root_window.protocol("WM_DELETE_WINDOW", lambda: self.close_main_window())
 
