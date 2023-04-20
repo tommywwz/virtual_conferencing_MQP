@@ -1,7 +1,6 @@
 import threading
 import tkinter as tk
 from tkinter import ttk
-import sv_ttk
 import cv2
 from Utils import Params
 from PIL import Image, ImageTk
@@ -59,8 +58,6 @@ class ServerApp:
 
         if __name__ == '__main__':
             self.root_window.mainloop()
-
-        sv_ttk.set_theme('dark')  # setting up svttk theme
 
     def root_play_video(self):
         start_time = time.time()

@@ -13,7 +13,12 @@ class App:
         self.root.geometry('300x80')
         self.root.resizable(False, False)
         self.root.attributes('-fullscreen', False)
-        self.root.configure(bg='black')
+        # Just simply import the azure.tcl file
+        self.root.tk.call("source", "azure.tcl")
+
+        self.root.tk.call("set_theme", "dark")
+
+        # self.root.configure(bg='black')
         self.root.focus_force()
         self.fl = tk.Frame(self.root)
         self.fr = tk.Frame(self.root)
@@ -30,7 +35,7 @@ class App:
         self.client_btn.place(relx=0.5, rely=0.5, anchor='center')
 
         self.root.protocol("WM_DELETE_WINDOW", self.close_main_window)
-        sv_ttk.set_theme('dark')
+        # sv_ttk.set_theme('dark')
         self.root.mainloop()
 
     def open_server(self):
