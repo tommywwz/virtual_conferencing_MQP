@@ -1,7 +1,6 @@
 import socket
 import tkinter as tk
 from tkinter import ttk
-import sv_ttk
 from Utils import Params
 from client import ClientVideo
 from PIL import Image, ImageTk
@@ -45,7 +44,7 @@ class ClientApp:
 
         # start ip window
         self.popup_ip_window = PopupWindow(self)
-        self.popup_ip_window.ip_window.wait_window()
+        self.root_window.wait_window(self.popup_ip_window.ip_window)
 
         if self.popup_ip_window.connected:
             # if the popup closed when connection was established
@@ -126,7 +125,8 @@ class PopupWindow:
         # self.ip_window.configure(bg='white')
 
         self.ip_entry = ttk.Entry(self.ip_window, width=30)
-        self.ip_entry.focus_set()
+        self.ip_window.focus_force()
+        self.ip_entry.focus_force()
         self.button = ttk.Button(self.ip_window, text="Enter", command=self.set_IP, style="Accent.TButton")
         self.ip_window.bind('<Return>', self.on_enter_event)
         self.error_label = tk.Label(self.ip_window, text="Failed to connect", fg="red")

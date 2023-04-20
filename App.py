@@ -1,6 +1,5 @@
-import threading
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, font
 import sv_ttk
 from Utils import *
 from server import ServerApp
