@@ -10,13 +10,14 @@ RATE = 44100
 
 class ClientAudio:
     def __init__(self, HOST_IP, PORT):
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        socket_addr = (HOST_IP, PORT + 1)
-        client.connect(socket_addr)
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket_addr = (HOST_IP, PORT + 1)
+        self.client.connect(self.socket_addr)
         print("[Client] Got connection")
-        self.send_audio(client)
+        self.send_audio()
 
-    def send_audio(self, conn):
+    def send_audio(self):
+        conn = self.client
         p = pyaudio.PyAudio()
         stream = p.open(format=FORMAT,
                         channels=CHANNELS,
