@@ -53,11 +53,15 @@ class ClientApp:
             self.thread_clientVid.setDaemon(True)
             self.thread_clientVid.start()
 
+            self.root_window.focus_force()
             self.calib_cam()
 
             self.play_selfie_video()
             if __name__ == '__main__':
                 self.root_window.mainloop()
+        else:
+            print("Connection aborted")
+            self.root_window.destroy()
 
     def handle_user_right_click(self, event):
         if self.thread_clientVid.calib_flag:

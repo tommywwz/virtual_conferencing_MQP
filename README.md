@@ -25,14 +25,8 @@ $ pip install -r requirements.txt
 ## Where to Start?
 
 This project consist of two individual programs, the [Server App](./server/ServerApp.py), and the [Client App](./client/ClientApp.py). <br /><br />
-There are several step to set up and run the program:
+There are the steps to set up and run the program:
 1. Make sure all computers are connected in the same local network. One computer will be used as server and other computers will be client.
-2. Use ```ipconfig``` command to find the local network ip address of the server computer. 
-3. Change the ```HOST_IP``` in [Params.py](./Utils/Params.py) to the server computer's IP address for all devices.
-4. For the server side: 
-   1. Set ```SERVER_CAM_ID``` in [video_joint.py](./server/video_joint.py) to the Camera ID the server side will be using (Camera ID normally starts from 0); to have the best experience, we recommend to rotate the camera 90 degree clockwise (from landscape to portrait).
-   2. Run [ServerApp.py](./server/ServerApp.py) on the computer used as server.
-5. For the client side:
-   1. Set ```CamID``` in [ClientApp.py](./client/ClientApp.py) to the Camera ID the client side will be using (Camera ID normally starts from 0); to have the best experience, we recommend to rotate the camera 90 degree clockwise (from landscape to portrait).
-   2. Run [ClientApp.py](./client/ClientApp.py) on client computers
-
+2. Start the application by running the [App.py](./App.py) file
+3. For the server, click on the "Start Server" button, and for the client, click on the "Start Client" button.
+4. In the client application, for connecting to server, enter the server IP address and click on the "Connect" button.

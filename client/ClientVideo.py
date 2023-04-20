@@ -108,7 +108,7 @@ class ClientVideo(threading.Thread):
                     if loc_cam.isOpened():
                         success, frame = loc_cam.read()
                         if success:
-                            frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
+                            frame = cv2.rotate(cv2.flip(frame.copy(), 1), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
                             self.do_calibration(frame)
                     else:
                         frame, _ = gen_fake_frame()
@@ -132,7 +132,7 @@ class ClientVideo(threading.Thread):
                 if loc_cam.isOpened():
                     success, frame = loc_cam.read()
                     if success:
-                        frame = cv2.rotate(frame.copy(), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
+                        frame = cv2.rotate(cv2.flip(frame.copy(), 1), cv2.ROTATE_90_CLOCKWISE)  # rotate raw frame
                 else:
                     frame, _ = gen_fake_frame()
                     frame = put_text_on_center(frame, "Camera not found", color=(0, 0, 255), font_scale=1, thickness=2)
@@ -186,7 +186,6 @@ class ClientVideo(threading.Thread):
         return rsz_image
 
     def do_calibration(self, frame):
-        # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         font = cv2.FONT_HERSHEY_SIMPLEX
         linetype = cv2.LINE_AA
         # calculate the resizing ratio

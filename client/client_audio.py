@@ -1,14 +1,23 @@
 import pyaudio
 import socket
-from ClientVideo import HOST_IP, PORT
+import Utils.Params as Params
 
 CHUNK = 512
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
 
-if __name__ == '__main__':
-    def send_audio(conn):
+
+class ClientAudio:
+    def __init__(self, HOST_IP, PORT):
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket_addr = (HOST_IP, PORT + 1)
+        self.client.connect(self.socket_addr)
+        print("[Client] Got connection")
+        self.send_audio()
+
+    def send_audio(self):
+        conn = self.client
         p = pyaudio.PyAudio()
         stream = p.open(format=FORMAT,
                         channels=CHANNELS,
@@ -20,12 +29,8 @@ if __name__ == '__main__':
             conn.sendall(data)
 
 
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    socket_addr = (HOST_IP, PORT+1)
-    client.connect(socket_addr)
-    print("[Client] Got connection")
-
-    send_audio(client)
+if __name__ == '__main__':
+    client_audio = ClientAudio(Params.HOST_IP, Params.PORT)
 
 # send_thread = threading.Thread(target=send_audio, args=(client,))
 # send_thread.start()

@@ -1,6 +1,6 @@
 import errno
 import threading, socket, select, struct, pickle
-from Utils import Params
+from Utils import Params, Tools
 import time
 
 
@@ -10,16 +10,7 @@ class VideoServer:
         self.port = port
         self.CamMan = CamMan
         self.exit_event = threading.Event()
-        # create a datagram socket (single UDP request and response, then close)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # connect to an address on the internet, that's likely to always be up
-        # (the Google primary DNS is a good bet)
-        sock.connect(("8.8.8.8", 80))
-        # after connecting, the socket will have the IP in its address
-        self.host_ip = sock.getsockname()[0]
-        print("Your Computer IP Address is: " + self.host_ip)
-        # done
-        sock.close()
+        self.host_ip = Tools.get_host_ip()
 
     def start(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -93,7 +84,16 @@ class VideoServer:
 
             while len(data) < msg_size:
                 # keep loading the data until the entire data received
-                data += client_socket.recv(Params.buff_4K)
+                try:
+                    data += client_socket.recv(Params.buff_4K)
+                except ConnectionResetError or socket.error as error:
+                    print(Params.WARNING + str(client_addr) + ": " + str(error) + Params.ENDC)
+                    inputs.remove(client_socket)
+                    flag_client_forcibly_closed = True
+                    break
+            if flag_client_forcibly_closed or self.exit_event.is_set():
+                # if client forcibly closed the connection or server is shutting down
+                break
             frame_data = data[:msg_size]
             data = data[msg_size:]
             frameClass = pickle.loads(frame_data)
