@@ -6,6 +6,7 @@ import struct
 import threading
 import queue
 import numpy as np
+from Utils import Tools
 from Utils import edge_detection, Params
 from Utils.Frame import Frame
 from Utils.AutoResize import AutoResize
@@ -63,9 +64,9 @@ class ClientVideo(threading.Thread):
         self.edge_detector = edge_detection.EdgeDetection()
         self.client_auto_resize = AutoResize()
 
-        client_id = socket.gethostbyname(socket.gethostname())
-        print("HOST NAME: ", client_id)
-        self.frameClass = Frame(client_id)
+        client_ip = Tools.get_host_ip()
+        print("HOST NAME: ", client_ip)
+        self.frameClass = Frame(client_ip)
 
     def set_cam(self, camID):
 
@@ -123,10 +124,10 @@ class ClientVideo(threading.Thread):
                     self.frameClass.updateFrame(image=blank_screen_for_server, edge_line=fake_edge)
                     try:
                         self.send_msg(self.frameClass)
-                    except ConnectionResetError or ConnectionError as e:
+                    except ConnectionResetError or ConnectionError or socket.error as e:
                         print(e)
                         self.calib_flag = False
-                        continue
+                        break
                     continue
 
                 if loc_cam.isOpened():
@@ -151,7 +152,7 @@ class ClientVideo(threading.Thread):
                     self.send_msg(self.frameClass)
                 except ConnectionResetError or ConnectionError as e:
                     print(e)
-                    continue
+                    break
 
     def send_msg(self, frameClass):
         if self.client_socket is None:
@@ -161,7 +162,7 @@ class ClientVideo(threading.Thread):
             # data length followed by serialized frame object
             msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
             self.client_socket.sendall(msg)
-        except ConnectionResetError as e:
+        except ConnectionResetError or socket.error as e:
             self.server_down.set()
             self.client_socket = None
             raise e
