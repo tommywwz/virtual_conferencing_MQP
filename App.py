@@ -38,13 +38,25 @@ class App:
 
     def open_server(self):
         self.root.withdraw()
-        ServerApp.ServerApp(tk.Toplevel(self.root), "Meeting")
+        top_window = tk.Toplevel(self.root)
+        ServerApp.ServerApp(top_window, "Meeting")
+        try:
+            self.root.wait_window(top_window)
+        except tk.TclError:
+            print("Server window closed unexpectedly")
+            pass
         self.root.deiconify()
         self.root.focus_set()
 
     def open_client(self):
         self.root.withdraw()
-        ClientApp.ClientApp(tk.Toplevel(self.root), "Meeting")
+        top_window = tk.Toplevel(self.root)
+        ClientApp.ClientApp(top_window, "Meeting")
+        try:
+            self.root.wait_window(top_window)
+        except tk.TclError:
+            print("Client window closed unexpectedly")
+            pass
         self.root.deiconify()
         self.root.focus_set()
 
