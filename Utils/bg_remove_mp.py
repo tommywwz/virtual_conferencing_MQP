@@ -96,9 +96,9 @@ def stackIMG(cam_dict, bg_img, fit_shape, w_step, margins):
                 edge_left = (0, reference_y)
                 edge_right = (fit_w-1, reference_y)
             else:
-                ratio = fit_h / frame_h  # calculate the ratio of fit shape respect to original shape
                 edge_a, edge_b = frameClass.edge_line  # extract the line equation parameters a, b
 
+                ratio = fit_h / frame_h  # calculate the ratio of fit shape respect to original shape
                 loc_edge_b = edge_b * ratio  # translate the edge height to current pixel coordinate
                 loc_edge_y = edge_y * ratio
 
