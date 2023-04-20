@@ -19,14 +19,15 @@ class ServerApp:
         self.photo = None  # holds the main window image
         self.root_window = root_window
         self.root_window.title(window_title)
+        self.root_window.geometry("%dx%d" % (Params.BG_W + 30, Params.BG_H + 30))
+        self.root_window.attributes('-fullscreen', True)
+
         self.calib_window_closed = True
 
         width = self.root_window.winfo_screenwidth()
         height = self.root_window.winfo_screenheight()
         self.width_cam = int(width / 2)
         self.height_cam = int(height / 2)
-        self.root_window.geometry("%dx%d" % (Params.BG_W + 30, Params.BG_H + 30))
-        self.root_window.attributes('-fullscreen', True)
         # self.root_window.configure(bg='black')
 
         self.canvas = tk.Canvas(self.root_window, width=self.width_cam, height=self.height_cam)

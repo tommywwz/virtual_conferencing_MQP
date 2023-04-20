@@ -13,7 +13,6 @@ mp_drawing = mp.solutions.drawing_utils
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 
 cap = cv2.VideoCapture(0)
-StaticImg = cv2.imread("../assets/vid/solvay2.jpg")
 
 
 class HeadTrack:

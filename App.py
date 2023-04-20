@@ -1,7 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, font
-import sv_ttk
-from Utils import *
+from tkinter import ttk
 from server import ServerApp
 from client import ClientApp
 
