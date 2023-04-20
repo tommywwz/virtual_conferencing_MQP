@@ -84,7 +84,16 @@ class VideoServer:
 
             while len(data) < msg_size:
                 # keep loading the data until the entire data received
-                data += client_socket.recv(Params.buff_4K)
+                try:
+                    data += client_socket.recv(Params.buff_4K)
+                except ConnectionResetError or socket.error as error:
+                    print(Params.WARNING + str(client_addr) + ": " + str(error) + Params.ENDC)
+                    inputs.remove(client_socket)
+                    flag_client_forcibly_closed = True
+                    break
+            if flag_client_forcibly_closed or self.exit_event.is_set():
+                # if client forcibly closed the connection or server is shutting down
+                break
             frame_data = data[:msg_size]
             data = data[msg_size:]
             frameClass = pickle.loads(frame_data)
