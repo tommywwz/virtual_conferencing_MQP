@@ -78,9 +78,9 @@ def do_calib(edge_detector, frame, mouse_location):
 
 
 class CamThread(threading.Thread):
-    def __init__(self, CamMan, previewName, camID, if_usercam, if_demo):
+    def __init__(self, previewName, camID, if_usercam, if_demo):
         threading.Thread.__init__(self)
-        self.CamMan = CamMan
+        self.CamMan_singleton = CamManagement.CamManagement()
         self.previewName = previewName
         self.camID = camID
         self.user_cam_id = 0
@@ -92,9 +92,9 @@ class CamThread(threading.Thread):
     def run(self):
         print("Starting Thread: " + self.previewName)
         if self.if_demo:  # if starting a demo video, starts videoPreview, otherwise, starts camera thread
-            self.videoPreview(self.CamMan, self.previewName, self.camID)
+            self.videoPreview(self.previewName, self.camID)
         else:
-            self.camPreview(self.CamMan, self.previewName, self.user_cam_id)
+            self.camPreview(self.previewName, self.user_cam_id)
 
     def set_user_cam(self, cam_id):
         with cam_mutex:
@@ -105,7 +105,7 @@ class CamThread(threading.Thread):
             self.user_cam.set(4, Params.RAW_CAM_H)  # height
             self.user_cam_id = cam_id
 
-    def camPreview(self, CamMan, previewName, camID):
+    def camPreview(self, previewName, camID):
         # cam = vids[camID]
         # cv2.namedWindow("iso frame " + str(camID))
         # Real time video cap
@@ -120,25 +120,25 @@ class CamThread(threading.Thread):
 
             if not success or not isOpened:
                 # skip if no frame
-                CamMan.put_user_frame(empty_frame)
+                self.CamMan_singleton.put_user_frame(empty_frame)
                 continue
 
             frame = cv2.rotate(cv2.flip(frame, 1), cv2.ROTATE_90_CLOCKWISE)
 
-            if CamMan.calib:  # check if calibration is toggled in the user's cam thread
+            if self.CamMan_singleton.calib:  # check if calibration is toggled in the user's cam thread
                 frame, _ = do_calib(edge_detector, frame, self.mouse_location)
                 # if in calibration, update frame and edge information
 
-            CamMan.put_user_frame(frame)
+            self.CamMan_singleton.put_user_frame(frame)
             # logging.debug(str(frameClass.edge_line))
 
-            if CamMan.check_Term():
+            if self.CamMan_singleton.check_Term():
                 break
 
         print(Params.OKGREEN + "Exiting UserCam" + previewName + Params.ENDC)
         self.user_cam.release()
 
-    def videoPreview(self, CamMan, previewName, camID):
+    def videoPreview(self, previewName, camID):
         # for video Demo, probably never used
         cam = cv2.VideoCapture(vids[camID])
         ed = edge_detection.EdgeDetection()
@@ -147,89 +147,89 @@ class CamThread(threading.Thread):
         frame_counter = 0
         calib_length = 50
 
-        # demo video calib phase
-        while True:
-            success, frame = cam.read()
-
-            if not success:  # check if video is played to the end
-                cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                # restart the video from the first frame if it is ended
-                continue
-
-            image = cv2.resize(frame, (Params.VID_W, Params.VID_H))
-            if frame_counter < calib_length:
-                ratio = autoResize.resize(image, 100)
-
-                adjust_w = round(Params.VID_W * ratio)
-                adjust_h = round(Params.VID_H * ratio)
-                new_shape = (adjust_w, adjust_h)
-                if ratio > 1:
-                    rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_LINEAR)
-                    ah, aw = rsz_image.shape[:2]
-                    dn = round(ah * 0.5 + Params.VID_H * 0.5)
-                    up = round(ah * 0.5 - Params.VID_H * 0.5)
-                    lt = round(aw * 0.5 - Params.VID_W * 0.5)
-                    rt = round(aw * 0.5 + Params.VID_W * 0.5)
-                    rsz_image = rsz_image[up:dn, lt:rt]
-                else:
-                    rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
-
-                # print("cam" + str(camID) + " ratio: " + str(ratio))
-                frame_counter += 1
-                edge = ed.process_frame(rsz_image, sample_size=100)
-                a, b = edge
-                if a is not None and b is not None:
-                    h, w, c = rsz_image.shape
-                    cv2.line(rsz_image, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
-                    # cv2.imshow("test"+str(camID), resized_frame)
-                else:
-                    edge = (0, 0)
-                frameClass.updateFrame(image=rsz_image, edge_line=edge, ref_ratio=ratio)  # update edge information
-            else:
-                break
-
-            CamMan.put_frame(camID=camID, FRAME=frameClass)
-            cv2.waitKey(15)
-            if CamMan.check_Term():
-                break
-
-        # extract the calibrated parameters for cropping image
-        ratio = frameClass.ref_ratio
-        adjust_w = round(Params.VID_W * ratio)
-        adjust_h = round(Params.VID_H * ratio)
-        new_shape = (adjust_w, adjust_h)
-
-        # demo video running phase
-        while True:
-            success, frame = cam.read()
-
-            if not success:  # check if video is played to the end
-                cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                # restart the video from the first frame if it is ended
-                continue
-
-            image = cv2.resize(frame, (Params.VID_W, Params.VID_H))
-
-            if ratio > 1:
-                rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_LINEAR)
-                ah, aw = rsz_image.shape[:2]
-                dn = round(ah * 0.5 + Params.VID_H * 0.5)
-                up = round(ah * 0.5 - Params.VID_H * 0.5)
-                lt = round(aw * 0.5 - Params.VID_W * 0.5)
-                rt = round(aw * 0.5 + Params.VID_W * 0.5)
-                rsz_image = rsz_image[up:dn, lt:rt]
-            else:
-                rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
-
-            frameClass.updateFrame(image=rsz_image)  # update image only
-            CamMan.put_frame(camID=camID, FRAME=frameClass)
-
-            cv2.waitKey(15)
-            if CamMan.check_Term():
-                break
-
-        print("Exiting " + previewName)
-        cam.release()
+        # # demo video calib phase
+        # while True:
+        #     success, frame = cam.read()
+        #
+        #     if not success:  # check if video is played to the end
+        #         cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        #         # restart the video from the first frame if it is ended
+        #         continue
+        #
+        #     image = cv2.resize(frame, (Params.VID_W, Params.VID_H))
+        #     if frame_counter < calib_length:
+        #         ratio = autoResize.resize(image, 100)
+        #
+        #         adjust_w = round(Params.VID_W * ratio)
+        #         adjust_h = round(Params.VID_H * ratio)
+        #         new_shape = (adjust_w, adjust_h)
+        #         if ratio > 1:
+        #             rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_LINEAR)
+        #             ah, aw = rsz_image.shape[:2]
+        #             dn = round(ah * 0.5 + Params.VID_H * 0.5)
+        #             up = round(ah * 0.5 - Params.VID_H * 0.5)
+        #             lt = round(aw * 0.5 - Params.VID_W * 0.5)
+        #             rt = round(aw * 0.5 + Params.VID_W * 0.5)
+        #             rsz_image = rsz_image[up:dn, lt:rt]
+        #         else:
+        #             rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
+        #
+        #         # print("cam" + str(camID) + " ratio: " + str(ratio))
+        #         frame_counter += 1
+        #         edge = ed.process_frame(rsz_image, sample_size=100)
+        #         a, b = edge
+        #         if a is not None and b is not None:
+        #             h, w, c = rsz_image.shape
+        #             cv2.line(rsz_image, (0, round(b)), (w, round((w * a + b))), (0, 255, 0), 2)
+        #             # cv2.imshow("test"+str(camID), resized_frame)
+        #         else:
+        #             edge = (0, 0)
+        #         frameClass.updateFrame(image=rsz_image, edge_line=edge, ref_ratio=ratio)  # update edge information
+        #     else:
+        #         break
+        #
+        #     CamMan.put_frame(camID=camID, FRAME=frameClass)
+        #     cv2.waitKey(15)
+        #     if CamMan.check_Term():
+        #         break
+        #
+        # # extract the calibrated parameters for cropping image
+        # ratio = frameClass.ref_ratio
+        # adjust_w = round(Params.VID_W * ratio)
+        # adjust_h = round(Params.VID_H * ratio)
+        # new_shape = (adjust_w, adjust_h)
+        #
+        # # demo video running phase
+        # while True:
+        #     success, frame = cam.read()
+        #
+        #     if not success:  # check if video is played to the end
+        #         cam.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        #         # restart the video from the first frame if it is ended
+        #         continue
+        #
+        #     image = cv2.resize(frame, (Params.VID_W, Params.VID_H))
+        #
+        #     if ratio > 1:
+        #         rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_LINEAR)
+        #         ah, aw = rsz_image.shape[:2]
+        #         dn = round(ah * 0.5 + Params.VID_H * 0.5)
+        #         up = round(ah * 0.5 - Params.VID_H * 0.5)
+        #         lt = round(aw * 0.5 - Params.VID_W * 0.5)
+        #         rt = round(aw * 0.5 + Params.VID_W * 0.5)
+        #         rsz_image = rsz_image[up:dn, lt:rt]
+        #     else:
+        #         rsz_image = cv2.resize(image, new_shape, interpolation=cv2.INTER_AREA)
+        #
+        #     frameClass.updateFrame(image=rsz_image)  # update image only
+        #     CamMan.put_frame(camID=camID, FRAME=frameClass)
+        #
+        #     cv2.waitKey(15)
+        #     if CamMan.check_Term():
+        #         break
+        #
+        # print("Exiting " + previewName)
+        # cam.release()
 
 
 def stackParam(cam_dict, bg_shape: int):
@@ -267,7 +267,7 @@ def stackParam(cam_dict, bg_shape: int):
 
 class VideoJoint:
     def __init__(self):
-        self.CamMan = CamManagement.CamManagement()
+        self.CamMan_singleton = CamManagement.CamManagement()
         self.ht = HeadTrack.HeadTrack()
         self.Q_FrameForDisplay = Queue(maxsize=3)
         self.Q_userFrame = Queue(maxsize=3)
@@ -278,7 +278,7 @@ class VideoJoint:
         self.update_user_cam_id = threading.Event()
         self.user_cam_id = 0
 
-        self.server = video_server.VideoServer(Params.HOST_IP, Params.PORT, self.CamMan)
+        self.server = video_server.VideoServer(Params.HOST_IP, Params.PORT)
 
     def run(self):
         server_thread = threading.Thread(target=self.server.start, args=())
@@ -301,7 +301,7 @@ class VideoJoint:
         self.user_cam_id = camID
 
     def ctlThread(self):
-        CamMan = self.CamMan
+        CamMan = self.CamMan_singleton
         ht = self.ht
 
         userCam = SERVER_CAM_ID
@@ -316,7 +316,7 @@ class VideoJoint:
 
         # Opens User's Camera
         cam_name = "Camera %s" % str(userCam)
-        camThread = CamThread(CamMan, cam_name, camID=userCam, if_usercam=True, if_demo=False)
+        camThread = CamThread(cam_name, camID=userCam, if_usercam=True, if_demo=False)
         camThread.start()
 
         a_rsz = AutoResize()
@@ -335,7 +335,7 @@ class VideoJoint:
                 camThread.set_user_cam(userCam)
 
             user_frame = CamMan.get_user_frame()
-            if self.CamMan.calib:
+            if self.CamMan_singleton.calib:
                 camThread.mouse_location = self.mouse_location_FE
                 self.Q_userFrame.put(user_frame)
 

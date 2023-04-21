@@ -2,7 +2,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 import cv2
-from Utils import Params, Tools
+from Utils import Params, Tools, CamManagement
 from PIL import Image, ImageTk
 import os
 from server import video_joint
@@ -109,7 +109,8 @@ class PopUpWindow(threading.Thread):
         self.new_window.title("Calibration")
 
         self.root.calib_window_closed = False
-        self.root.VJ.CamMan.calib = True
+        self.CamMan = CamManagement.CamManagement()
+        self.CamMan.calib = True
 
         self.canvas = tk.Canvas(self.new_window, width=Params.VID_W,
                                 height=Params.VID_H)
@@ -175,7 +176,7 @@ class PopUpWindow(threading.Thread):
         print("-----------exiting calibration window------------")
         while not self.root.VJ.Q_userFrame.empty():
             item = self.root.VJ.Q_userFrame.get()
-        self.root.VJ.CamMan.calib = False
+        self.CamMan.calib = False
         self.root.calib_btn.configure(state='normal')
         self.root.root_window.focus_set()
         self.new_window.destroy()

@@ -11,19 +11,22 @@ camDEL_lock = threading.Lock()
 
 
 class CamManagement:
-    # Interact with Frame data structure
-    # cam_id = 0
-    reference_y = np.floor(Params.BG_DIM[1] * 6 / 7)
+    __instance = None
 
-    def __init__(self):
-        self.FRAMES_dictQ = {}  # a dictionary that holds a queue of Frame data structure
-        self.UserFramesQ = Queue(maxsize=3)  # user image queue
-        self.TERM = False
-        # self.edge_lines = {}  # edge equation (a, b) for each cam
-        # self.edge_y = {}  # average height of edge for each cam
-        self.empty_frame = np.zeros(Params.SHAPE, dtype=np.uint8)
-        self.calib = False
-        # self.calibCam = None
+    reference_y = np.floor(Params.BG_DIM[1] * 6 / 7)
+    FRAMES_dictQ = {}  # a dictionary that holds a queue of Frame data structure
+    UserFramesQ = Queue(maxsize=3)  # user image queue
+    TERM = False
+    # self.edge_lines = {}  # edge equation (a, b) for each cam
+    # self.edge_y = {}  # average height of edge for each cam
+    empty_frame = np.zeros(Params.SHAPE, dtype=np.uint8)
+    calib = False
+    # self.calibCam = None\
+
+    def __new__(cls):
+        if CamManagement.__instance is None:
+            CamManagement.__instance = object.__new__(cls)
+        return CamManagement.__instance
 
     def init_cam(self, camID, queue_size=3):
         # initialize a queue for the given camID

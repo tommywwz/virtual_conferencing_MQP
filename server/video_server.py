@@ -1,14 +1,14 @@
 import errno
 import threading, socket, select, struct, pickle
-from Utils import Params, Tools
+from Utils import Params, Tools, CamManagement
 import time
 
 
 class VideoServer:
-    def __init__(self, host_ip, port, CamMan):
+    def __init__(self, host_ip, port):
         self.server_socket = None
         self.port = port
-        self.CamMan = CamMan
+        self.CamMan_singleton = CamManagement.CamManagement()
         self.exit_event = threading.Event()
         self.host_ip = Tools.get_host_ip()
 
@@ -40,7 +40,7 @@ class VideoServer:
         data = b""
         payload_size = struct.calcsize("Q")
         if not self.exit_event.is_set():
-            self.CamMan.init_cam(clientAddr_camID)  # initialize the FIFO queue for current camera feed
+            self.CamMan_singleton.init_cam(clientAddr_camID)  # initialize the FIFO queue for current camera feed
 
         while not self.exit_event.is_set():
             readable, writable, exceptional = select.select(inputs, [], inputs)
@@ -97,10 +97,10 @@ class VideoServer:
             frame_data = data[:msg_size]
             data = data[msg_size:]
             frameClass = pickle.loads(frame_data)
-            self.CamMan.put_frame(clientAddr_camID, frameClass)
+            self.CamMan_singleton.put_frame(clientAddr_camID, frameClass)
 
         client_socket.close()
-        self.CamMan.delete_cam(clientAddr_camID)
+        self.CamMan_singleton.delete_cam(clientAddr_camID)
 
     # def handle_client(self, client_socket):
     #     while not self.exit_event.is_set():
