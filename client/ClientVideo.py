@@ -162,7 +162,7 @@ class ClientVideo(threading.Thread):
             # data length followed by serialized frame object
             msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
             self.client_socket.sendall(msg)
-        except ConnectionResetError or socket.error as e:
+        except ConnectionResetError or ConnectionAbortedError or socket.error as e:
             self.server_down.set()
             self.client_socket = None
             raise e
