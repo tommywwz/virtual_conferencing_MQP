@@ -6,8 +6,6 @@ from Utils.Frame import Frame
 
 
 # logging.basicConfig(level=logging.DEBUG)
-FRAMES_lock = threading.Lock()
-camDEL_lock = threading.Lock()
 
 
 class CamManagement:
@@ -21,6 +19,8 @@ class CamManagement:
     # self.edge_y = {}  # average height of edge for each cam
     empty_frame = np.zeros(Params.SHAPE, dtype=np.uint8)
     calib = False
+    FRAMES_lock = threading.Lock()
+    camDEL_lock = threading.Lock()
     # self.calibCam = None\
 
     def __new__(cls):
@@ -31,7 +31,7 @@ class CamManagement:
     def init_cam(self, camID, queue_size=3):
         # initialize a queue for the given camID
         # !your must init a frame queue in the dictionary to put and get frames!
-        with FRAMES_lock:
+        with self.FRAMES_lock:
             if camID in self.FRAMES_dictQ:
                 print("!!Cam already exists!!")
                 return
@@ -52,8 +52,8 @@ class CamManagement:
     def get_frames(self):
         # !your must init a frame queue in the dictionary to put and get frames!
         frame_dict = {}
-        with FRAMES_lock:
-            with camDEL_lock:
+        with self.FRAMES_lock:
+            with self.camDEL_lock:
                 for camID in self.FRAMES_dictQ:
                     current_Frame = self.FRAMES_dictQ[camID].get()
                     if current_Frame.close:
@@ -68,7 +68,7 @@ class CamManagement:
         for frame_queue in self.FRAMES_dictQ.values():
             if not frame_queue.empty():
                 while not frame_queue.empty():
-                    item = frame_queue.get()
+                    frame_queue.get()
                     print("dequeued one item")
             else:
                 print("The queue is empty.")
@@ -77,7 +77,7 @@ class CamManagement:
         flag_frame = Frame(camID)
         flag_frame.close = True  # genrate a frame to inform the thread to stop receiving frames of this cam
         self.FRAMES_dictQ[camID].put(flag_frame)
-        with camDEL_lock:
+        with self.camDEL_lock:
             del self.FRAMES_dictQ[camID]
 
     def set_Term(self, ifTerm: bool):
@@ -100,4 +100,7 @@ class CamManagement:
 
     def toggle_calib(self):
         self.calib = not self.calib
+
+    def clear_singleton(self):
+        self.__instance = None
 
