@@ -124,7 +124,7 @@ class ClientVideo(threading.Thread):
                     self.frameClass.updateFrame(image=blank_screen_for_server, edge_line=fake_edge)
                     try:
                         self.send_msg(self.frameClass)
-                    except ConnectionResetError or ConnectionError or socket.error as e:
+                    except Exception as e:
                         print(e)
                         self.calib_flag = False
                         break
@@ -150,22 +150,22 @@ class ClientVideo(threading.Thread):
                 self.frameClass.updateFrame(image=rsz_image, edge_line=self.edge_line)  # update edge information
                 try:
                     self.send_msg(self.frameClass)
-                except ConnectionResetError or ConnectionError as e:
+                except Exception as e:
                     print(e)
                     break
 
     def send_msg(self, frameClass):
         if self.client_socket is None:
-            raise ConnectionError("Client socket is None")
+            raise Exception("Client socket is None")
         try:
             pickled_frame = pickle.dumps(frameClass)
             # data length followed by serialized frame object
             msg = struct.pack("Q", len(pickled_frame)) + pickled_frame
             self.client_socket.sendall(msg)
-        except ConnectionResetError or socket.error as e:
+        except ConnectionResetError or ConnectionError or socket.error as e:
             self.server_down.set()
             self.client_socket = None
-            raise e
+            raise Exception("Server is down", e)
 
     def do_resize(self, frame):
         # -------------using the resizing ratio to resize image----------------
