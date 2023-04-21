@@ -75,15 +75,6 @@ class ServerApp:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame = cv2.resize(frame, (self.width_cam, self.height_cam))
 
-            duration = int(time.time() - start_time)
-            if duration is not 0:
-                fps = round(1.0 / duration)
-                cv2.putText(frame,
-                            text='FPS: ' + str(fps),
-                            org=(10, 30), fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                            fontScale=.4, color=(0, 255, 255), thickness=1,
-                            lineType=cv2.LINE_AA, bottomLeftOrigin=False)
-
             buff = Image.fromarray(frame)
             self.photo = ImageTk.PhotoImage(image=buff)
             self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
