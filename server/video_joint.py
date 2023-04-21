@@ -301,7 +301,6 @@ class VideoJoint:
         self.user_cam_id = camID
 
     def ctlThread(self):
-        CamMan = self.CamMan_singleton
         ht = self.ht
 
         userCam = SERVER_CAM_ID
@@ -322,7 +321,7 @@ class VideoJoint:
         a_rsz = AutoResize()
 
         while not self.Term:
-            frame_dict = CamMan.get_frames()
+            frame_dict = self.CamMan_singleton.get_frames()
 
             cam_count = len(frame_dict.keys())  # get the number of camera connected
             if cam_count != cam_loaded:  # update the stack parameter everytime a new cam joined or left
@@ -334,7 +333,7 @@ class VideoJoint:
                 self.update_user_cam_id.clear()
                 camThread.set_user_cam(userCam)
 
-            user_frame = CamMan.get_user_frame()
+            user_frame = self.CamMan_singleton.get_user_frame()
             if self.CamMan_singleton.calib:
                 camThread.mouse_location = self.mouse_location_FE
                 self.Q_userFrame.put(user_frame)
@@ -347,8 +346,8 @@ class VideoJoint:
             # print("put")
 
         print(Params.OKGREEN + "Closing Cam Control Thread" + Params.ENDC)
-        CamMan.set_Term(True)  # inform each camera threads to terminate
-        CamMan.dump_frame_queue()
+        self.CamMan_singleton.set_Term(True)  # inform each camera threads to terminate
+        self.CamMan_singleton.dump_frame_queue()  # dump the frame queue
 
     def stop(self):
         self.server.stop()

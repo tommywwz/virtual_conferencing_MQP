@@ -109,8 +109,8 @@ class PopUpWindow(threading.Thread):
         self.new_window.title("Calibration")
 
         self.root.calib_window_closed = False
-        self.CamMan = CamManagement.CamManagement()
-        self.CamMan.calib = True
+        self.CamMan_singleton = CamManagement.CamManagement()
+        self.CamMan_singleton.calib = True
 
         self.canvas = tk.Canvas(self.new_window, width=Params.VID_W,
                                 height=Params.VID_H)
@@ -176,7 +176,7 @@ class PopUpWindow(threading.Thread):
         print("-----------exiting calibration window------------")
         while not self.root.VJ.Q_userFrame.empty():
             item = self.root.VJ.Q_userFrame.get()
-        self.CamMan.calib = False
+        self.CamMan_singleton.calib = False
         self.root.calib_btn.configure(state='normal')
         self.root.root_window.focus_set()
         self.new_window.destroy()

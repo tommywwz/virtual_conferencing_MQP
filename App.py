@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from server import ServerApp
 from client import ClientApp
+from Utils import CamManagement
 
 
 class App:
@@ -38,6 +39,7 @@ class App:
 
     def open_server(self):
         self.root.withdraw()
+        CamManagement.CamManagement()
         top_window = tk.Toplevel(self.root)
         ServerApp.ServerApp(top_window, "Meeting")
         try:
@@ -45,8 +47,8 @@ class App:
         except tk.TclError:
             print("Server window closed unexpectedly")
             pass
-        self.root.deiconify()
-        self.root.focus_set()
+        CamManagement.CamManagement().clear_singleton()
+        self.close_main_window()
 
     def open_client(self):
         self.root.withdraw()
@@ -57,8 +59,7 @@ class App:
         except tk.TclError:
             print("Client window closed unexpectedly")
             pass
-        self.root.deiconify()
-        self.root.focus_set()
+        self.close_main_window()
 
     def close_main_window(self):
         self.root.destroy()
